@@ -23,7 +23,7 @@
                                r)
                   (apply concat)
                   (filter (comp var-symbol? first)))
-        tests (->> (map (fn [[v pos]] ['= (second (first (filter #(= (first %) v) vars))) pos] ) vars)
+        tests (->> (map (fn [[v pos]] ['= (second (first (filter #(= (first %) v) vars))) pos]) vars)
                    (remove (fn [[op a b]] (= a b)))
                    (map (fn [[op a [ri ci]]] [ri [op a ci]]))
                    (group-by first)
