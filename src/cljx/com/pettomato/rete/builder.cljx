@@ -6,14 +6,15 @@
   (and (symbol? x)
        (= (get (str x) 0) \?)))
 
-(defn get-alpha-tests [r]
+(defn get-alpha-tests [r sort-alpha-tests]
   (map (fn [c]
-         (remove nil?
-                 (map-indexed (fn [i t]
-                                (if (var-symbol? t)
-                                  nil
-                                  ['= i t]))
-                              c)))
+         (sort-alpha-tests
+          (remove nil?
+                  (map-indexed (fn [i t]
+                                 (if (var-symbol? t)
+                                   nil
+                                   ['= i t]))
+                               c))))
        r))
 
 (defn get-consistency-tests [r]
@@ -30,30 +31,37 @@
                    (reduce-kv (fn [m k v] (assoc m k (map second v))) {}))]
     (map-indexed (fn [i c] (get tests i)) r)))
 
-(defn construct-tests [r]
+(defn construct-tests [r sort-alpha-tests]
   (map vector
-       (get-alpha-tests r)
+       (get-alpha-tests r sort-alpha-tests)
        (get-consistency-tests r)))
 
-(defn build-nodes [rs]
-  (let [rs             (map #(update-in % [:conditions] construct-tests) rs)
+(defn build-nodes [rs sort-alpha-tests]
+  (let [rs             (map #(update-in % [:conditions] construct-tests sort-alpha-tests) rs)
         cs             (map :conditions rs)
-        alpha-sigs     (for [r cs, c r, x (take-while identity (iterate butlast (first c)))] x)
-        beta-sigs      (for [r cs, x (take-while identity (iterate butlast r))] x)
 
-        alpha-mem-ids  (zipmap alpha-sigs (map keyword (map str (repeat "a") (range))))
-        alpha-test-ids (zipmap alpha-sigs (map keyword (map str (repeat "a-test") (range))))
-        beta-mem-ids   (assoc (zipmap beta-sigs (map keyword (map str (repeat "b") (range))))
-                         nil :dummy)
-        join-ids   (zipmap beta-sigs (map keyword (map str (repeat "j") (range))))]
-    {:alpha-tests (into {} (for [a alpha-sigs]
-                             [(alpha-test-ids a) {:parent (alpha-mem-ids (butlast a))
-                                                  :test   (last a)}]))
-     :alpha-mems  (into {} (for [a alpha-sigs]
-                             [(alpha-mem-ids a) {:parent (alpha-test-ids a)
-                                                 :memory #{}}]))
-     :beta-mems   (assoc (zipmap (vals beta-mem-ids) (repeat {:memory #{}}))
-                    :dummy {:memory #{[]}})
+        alpha-sigs     (into #{} (for [r cs, c r, x (iterate butlast (first c)) :while x] x))
+        beta-sigs      (into #{} (for [r cs,      x (iterate butlast r)         :while x] x))
+        ids            (fn [prefix] (map #(keyword (str prefix %)) (range)))
+        alpha-mem-ids  (zipmap     alpha-sigs (ids "a"))
+        alpha-test-ids (zipmap     alpha-sigs (ids "a-test"))
+        beta-mem-ids   (-> (zipmap beta-sigs  (ids "b"))
+                           (assoc nil :dummy))
+        join-ids       (zipmap     beta-sigs  (ids "j"))]
+    {:alpha-tests (reduce #(let [k (alpha-test-ids %2)
+                                 v {:parent (alpha-mem-ids (butlast %2))
+                                    :test   (last %2)}]
+                             (assoc %1 k v))
+                          {}
+                          alpha-sigs)
+     :alpha-mems  (reduce #(let [k (alpha-mem-ids %2)
+                                 v {:parent (alpha-test-ids %2)
+                                    :memory #{}}]
+                             (assoc %1 k v))
+                          {}
+                          alpha-sigs)
+     :beta-mems   (-> (zipmap (vals beta-mem-ids) (repeat {:memory #{}}))
+                      (assoc :dummy {:memory #{[]}}))
      :joins       (zipmap (vals join-ids)
                           (map (fn [b]
                                  {:alpha (alpha-mem-ids (first (last b)))
@@ -61,12 +69,14 @@
                                   :tests (second (last b))
                                   :out   (beta-mem-ids b)})
                                beta-sigs))
-     :productions (into {} (map-indexed #(vector (keyword (str "p" %1))
-                                                 {:parent (beta-mem-ids (:conditions %2))
-                                                  :conditions (:conditions %2)
-                                                  :add-matches (:add-matches %2)
-                                                  :rem-matches (:rem-matches %2)})
-                                        rs))}))
+     :productions (reduce (fn [m [k r]]
+                            (let [v {:parent (beta-mem-ids (:conditions r))
+                                     :conditions (:conditions r)
+                                     :add-matches (:add-matches r)
+                                     :rem-matches (:rem-matches r)}]
+                              (assoc m k v)))
+                          {}
+                          (map vector (ids "p") rs))}))
 
 (defn build-graph [nodes]
   (let [{:keys [alpha-tests alpha-mems beta-mems joins productions]} nodes
@@ -151,8 +161,33 @@
 
 (defn parse-and-compile-rules [index-field rs]
   (-> rs
-      build-nodes
+      (build-nodes (fn [x] (sort-by second #(cond (= %1 index-field) -1
+                                                  (= %2 index-field) 1
+                                                  :else    (compare %1 %2))
+                                    x)))
       build-graph
       optimize-graph
       compile-graph
       (hash-entry-nodes-by-field index-field)))
+
+(defn build-smap [var-lookup match]
+  (reduce-kv #(assoc %1 %2 (get-in match %3)) {} var-lookup))
+
+(defn action->rule [action-schema]
+  (let [{:keys [preconditions achieves deletes]} action-schema
+        vars (->> (map-indexed (fn [ri c]
+                                 (map-indexed (fn [ci t] [t [ri ci]])
+                                              c))
+                               preconditions)
+                  (apply concat)
+                  (filter (comp var-symbol? first))
+                  (into {}))
+        add-template (concat (for [x deletes]  ['- x])
+                             (for [x achieves] ['+ x]))
+        rem-template (concat (for [x achieves] ['- x])
+                             (for [x deletes]  ['+ x]))]
+    {:conditions  preconditions
+     :add-matches #(mapcat (fn [match] (clojure.walk/postwalk-replace (build-smap vars match) add-template)) %)
+     ;;:rem-matches #(mapcat (fn [match] (clojure.walk/postwalk-replace (build-smap vars match) rem-template)) %)
+     :rem-matches (constantly [])
+     }))
