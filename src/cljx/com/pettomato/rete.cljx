@@ -110,7 +110,7 @@
                     (if (f w)
                       (reduce #(right-activate- %1 %2 w) R (:successors node))
                       R))
-      :alpha-mem  (let [f   (:add-wme node)
+      :alpha-mem  (let [f   (:rem-wme node)
                         ws  (or (get-alpha R k) (:memory node))
                         ws' (f ws w)
                         R'  (put-alpha R k ws')]
