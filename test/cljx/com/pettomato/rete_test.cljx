@@ -7,22 +7,19 @@
 (defn adder+ [ms x] (for [m ms] ['+ [x (apply + (map second m))]]))
 (defn adder- [ms x] (for [m ms] ['- [x (apply + (map second m))]]))
 
-(def test-rules
-  [{:conditions  '[[:a ?v] [:b ?v]]
-    :add-matches #(adder+ % :c)
-    :rem-matches #(adder- % :c)}
-   {:conditions  '[[:d ?v1] [:e ?v2]]
-    :add-matches #(adder+ % :f)
-    :rem-matches #(adder- % :f)}
-   {:conditions  '[[:c ?v1] [:f ?v2]]
-    :add-matches #(adder+ % :g)
-    :rem-matches #(adder- % :g)}
-   {:conditions  '[[:a ?v1] [:b ?v2] [:d ?v3]]
-    :add-matches #(adder+ % :h)
-    :rem-matches #(adder- % :h)}])
-
 (deftest basic-tests
-  (let [R (parse-and-compile-rules 0 test-rules)]
+  (let [R (parse-and-compile-rules 0 [{:conditions  '[[:a ?v] [:b ?v]]
+                                       :add-matches #(adder+ % :c)
+                                       :rem-matches #(adder- % :c)}
+                                      {:conditions  '[[:d ?v1] [:e ?v2]]
+                                       :add-matches #(adder+ % :f)
+                                       :rem-matches #(adder- % :f)}
+                                      {:conditions  '[[:c ?v1] [:f ?v2]]
+                                       :add-matches #(adder+ % :g)
+                                       :rem-matches #(adder- % :g)}
+                                      {:conditions  '[[:a ?v1] [:b ?v2] [:d ?v3]]
+                                       :add-matches #(adder+ % :h)
+                                       :rem-matches #(adder- % :h)}])]
     (is (= (clear-matches R) R))
     (is (= (get-matches R) []))
     (is (= (add-wme R [:does-not-match 'does-not-match]) R))
@@ -48,3 +45,23 @@
                                      :rem-matches identity}])]
     (is (= (get-matches (reduce add-wme R '[[:a 5] [:c 5]]))
            [[[[:a 5]]] [[[:a 5]]] [[[:a 5] [:c 5]]]]))))
+
+(deftest consistency-tests
+  (let [R (parse-and-compile-rules 0
+                                   [{:conditions '[[:a ?x] [:b ?y] [< ?x ?y]]
+                                     :add-matches identity
+                                     :rem-matches identity}])]
+    (is (= (get-matches (reduce add-wme R '[[:a 1] [:b 2]]))
+           [[[[:a 1] [:b 2]]]]))
+    (is (= (get-matches (reduce add-wme R '[[:a 2] [:b 2]]))
+           []))))
+
+(deftest consistency-ops
+  (let [R (parse-and-compile-rules 0
+                                   [{:conditions '[[:a ?x] [:b ?y] [= [+ ?x ?x] ?y]]
+                                     :add-matches identity
+                                     :rem-matches identity}])]
+    (is (= (get-matches (reduce add-wme R '[[:a 1] [:b 2]]))
+           [[[[:a 1] [:b 2]]]]))
+    (is (= (get-matches (reduce add-wme R '[[:a 2] [:b 2]]))
+           []))))

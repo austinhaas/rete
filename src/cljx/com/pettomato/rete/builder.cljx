@@ -6,40 +6,52 @@
   (and (symbol? x)
        (= (get (str x) 0) \?)))
 
-(defn get-alpha-tests [r sort-alpha-tests]
-  (map (fn [c]
-         (sort-alpha-tests
-          (remove nil?
-                  (map-indexed (fn [i t]
-                                 (if (var-symbol? t)
-                                   nil
-                                   ['= i t]))
-                               c))))
-       r))
+(def consistency-ops {'= =, '!= not=, '< <, '> >, '<= <=, '>= >=, '+ +, '- -, '/ /, '* *})
 
-(defn get-consistency-tests [r]
-  (let [vars (->> (map-indexed (fn [ri c]
-                                 (map-indexed (fn [ci t] [t [ri ci]])
-                                              c))
-                               r)
+(defn expr? [x] (and (coll? x) (contains? consistency-ops (first x))))
+
+(defn aggregate-consistency-tests [r]
+  ;; ABxyCz => (A)(Bxy)(Cz)m where ABC are predicates and xyz are
+  ;; disequality constraints. The disequality constraints are
+  ;; associated with the preceding predicate.
+  (loop [cs r, acc []]
+    (if (empty? cs)
+      acc
+      (let [[c & cs'] cs
+            [ds cs''] (split-with expr? cs')]
+        (recur cs'' (conj acc (conj ds c)))))))
+
+(defn condition->alpha-tests [c]
+  (->> (map-indexed #(vector '= %1 %2) c)
+       (remove (comp var-symbol? last))))
+
+(defn condition->equality-tests [ri c vars]
+  (->> (map-indexed #(vector [ri %1] %2) c)
+       (filter (comp var-symbol? second))
+       (map (fn [[pos v]] ['= pos (get vars v)]))
+       (remove (fn [[op p1 p2]] (= p1 p2)))))
+
+(defn canonicalize-tests [r sort-alpha-tests]
+  (let [r' (aggregate-consistency-tests r)
+        vars (->> r'
+                  (map first)
+                  (map-indexed (fn [ri c] (map-indexed (fn [ci t] [t [ri ci]]) c)))
                   (apply concat)
-                  (filter (comp var-symbol? first)))
-        tests (->> (map (fn [[v pos]] ['= (second (first (filter #(= (first %) v) vars))) pos]) vars)
-                   (remove (fn [[op a b]] (= a b)))
-                   (map (fn [[op a [ri ci]]] [ri [op a ci]]))
-                   (group-by first)
-                   (reduce-kv (fn [m k v] (assoc m k (map second v))) {}))]
-    (map-indexed (fn [i c] (get tests i)) r)))
-
-(defn construct-tests [r sort-alpha-tests]
-  (map vector
-       (get-alpha-tests r sort-alpha-tests)
-       (get-consistency-tests r)))
+                  (filter (comp var-symbol? first))
+                  reverse
+                  (into {}))
+        alpha-tests (->> (map first r')
+                         (map condition->alpha-tests)
+                         (map sort-alpha-tests))
+        equality-tests (->> (map first r')
+                            (map-indexed #(condition->equality-tests %1 %2 vars)))
+        disequality-tests (->> (map rest r')
+                               (clojure.walk/postwalk-replace vars))]
+    (map vector alpha-tests equality-tests disequality-tests)))
 
 (defn build-nodes [rs sort-alpha-tests]
-  (let [rs             (map #(update-in % [:conditions] construct-tests sort-alpha-tests) rs)
+  (let [rs             (map #(update-in % [:conditions] canonicalize-tests sort-alpha-tests) rs)
         cs             (map :conditions rs)
-
         alpha-sigs     (into #{} (for [r cs, c r, x (iterate butlast (first c)) :while x] x))
         beta-sigs      (into #{} (for [r cs,      x (iterate butlast r)         :while x] x))
         ids            (fn [prefix] (map #(keyword (str prefix %)) (range)))
@@ -66,7 +78,7 @@
                           (map (fn [b]
                                  {:alpha (alpha-mem-ids (first (last b)))
                                   :beta  (beta-mem-ids (butlast b))
-                                  :tests (second (last b))
+                                  :tests (apply concat (rest (last b)))
                                   :out   (beta-mem-ids b)})
                                beta-sigs))
      :productions (reduce (fn [m [k r]]
@@ -101,10 +113,18 @@
   (assert (= op '=))
   #(= (get % pos) val))
 
+(defn eval-expr [x vars]
+  (if (expr? x)
+    (let [[op & args] x
+          op'         (get consistency-ops op)
+          args'       (map #(eval-expr % vars) args)]
+      (apply op' args'))
+    (get-in vars x)))
+
 (defn compile-consistency-tests [tests]
   (fn [t w]
-    (every? true? (for [[op p1 p2] tests]
-                    (= (get-in (conj t w) p1) (get w p2))))))
+    (let [t' (conj t w)]
+      (every? true? (map #(eval-expr % t') tests)))))
 
 (defn compile-graph [g]
   (let [{:keys [alpha-tests alpha-mems beta-mems joins productions]} g
@@ -159,12 +179,16 @@
         (assoc :root-fn (fn [w] (a->k (get w field))))
         (dissoc :entry-nodes))))
 
+(defn default-alpha-sort [index-field]
+  (fn [x]
+    (sort-by second #(cond (= %1 index-field) -1
+                           (= %2 index-field) 1
+                           :else              (compare %1 %2))
+             x)))
+
 (defn parse-and-compile-rules [index-field rs]
   (-> rs
-      (build-nodes (fn [x] (sort-by second #(cond (= %1 index-field) -1
-                                                  (= %2 index-field) 1
-                                                  :else    (compare %1 %2))
-                                    x)))
+      (build-nodes (default-alpha-sort index-field))
       build-graph
       optimize-graph
       compile-graph
@@ -175,12 +199,11 @@
 
 (defn action->rule [action-schema]
   (let [{:keys [preconditions achieves deletes]} action-schema
-        vars (->> (map-indexed (fn [ri c]
-                                 (map-indexed (fn [ci t] [t [ri ci]])
-                                              c))
-                               preconditions)
+        vars (->> preconditions
+                  (map-indexed (fn [ri c] (map-indexed (fn [ci t] [t [ri ci]]) c)))
                   (apply concat)
                   (filter (comp var-symbol? first))
+                  reverse
                   (into {}))
         add-template (concat (for [x deletes]  ['- x])
                              (for [x achieves] ['+ x]))
