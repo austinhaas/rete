@@ -6,10 +6,6 @@
   (and (symbol? x)
        (= (get (str x) 0) \?)))
 
-(def consistency-ops {'= =, '!= not=, '< <, '> >, '<= <=, '>= >=, '+ +, '- -, '/ /, '* *})
-
-(defn expr? [x] (and (coll? x) (contains? consistency-ops (first x))))
-
 (defn aggregate-consistency-tests [r]
   ;; ABxyCz => (A)(Bxy)(Cz)m where ABC are predicates and xyz are
   ;; disequality constraints. The disequality constraints are
@@ -18,7 +14,7 @@
     (if (empty? cs)
       acc
       (let [[c & cs'] cs
-            [ds cs''] (split-with expr? cs')]
+            [ds cs''] (split-with list? cs')]
         (recur cs'' (conj acc (conj ds c)))))))
 
 (defn condition->alpha-tests [c]
@@ -28,14 +24,14 @@
 (defn condition->equality-tests [ri c vars]
   (->> (map-indexed #(vector [ri %1] %2) c)
        (filter (comp var-symbol? second))
-       (map (fn [[pos v]] ['= pos (get vars v)]))
+       (map (fn [[pos v]] (list #+clj = #+cljs '= [::pos pos] (get vars v))))
        (remove (fn [[op p1 p2]] (= p1 p2)))))
 
 (defn canonicalize-tests [r sort-alpha-tests]
   (let [r' (aggregate-consistency-tests r)
         vars (->> r'
                   (map first)
-                  (map-indexed (fn [ri c] (map-indexed (fn [ci t] [t [ri ci]]) c)))
+                  (map-indexed (fn [ri c] (map-indexed (fn [ci v] [v [::pos [ri ci]]]) c)))
                   (apply concat)
                   (filter (comp var-symbol? first))
                   reverse
@@ -113,18 +109,24 @@
   (assert (= op '=))
   #(= (get % pos) val))
 
-(defn eval-expr [x vars]
-  (if (expr? x)
-    (let [[op & args] x
-          op'         (get consistency-ops op)
-          args'       (map #(eval-expr % vars) args)]
-      (apply op' args'))
-    (get-in vars x)))
+(defn tagged-pos? [x] (and (vector? x) (= (first x) ::pos)))
+
+#+cljs
+(def allowed-ops {'= =, 'not= not=, '< <, '<= <=, '> >, '>= >=, '+ +, '- -, '/ /, '* *})
+
+#+cljs
+(defn eval-expr [e]
+  (if (and (coll? e) (fn? (first e)))
+    (apply (first e) (map eval-expr (rest e)))
+    e))
 
 (defn compile-consistency-tests [tests]
-  (fn [t w]
-    (let [t' (conj t w)]
-      (every? true? (map #(eval-expr % t') tests)))))
+  (let [tests #+clj tests #+cljs (clojure.walk/postwalk-replace allowed-ops tests)]
+    (fn [t w]
+      (let [t' (conj t w)
+            expr (clojure.walk/postwalk #(if (tagged-pos? %) (get-in t' (second %)) %)
+                                        tests)]
+        (every? true? (map #+clj eval #+cljs eval-expr expr))))))
 
 (defn compile-graph [g]
   (let [{:keys [alpha-tests alpha-mems beta-mems joins productions]} g

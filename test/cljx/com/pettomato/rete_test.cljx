@@ -48,7 +48,7 @@
 
 (deftest consistency-tests
   (let [R (parse-and-compile-rules 0
-                                   [{:conditions '[[:a ?x] [:b ?y] [< ?x ?y]]
+                                   [{:conditions '[[:a ?x] [:b ?y] (< ?x ?y)]
                                      :add-matches identity
                                      :rem-matches identity}])]
     (is (= (get-matches (reduce add-wme R '[[:a 1] [:b 2]]))
@@ -58,7 +58,7 @@
 
 (deftest consistency-ops
   (let [R (parse-and-compile-rules 0
-                                   [{:conditions '[[:a ?x] [:b ?y] [= [+ ?x ?x] ?y]]
+                                   [{:conditions '[[:a ?x] [:b ?y] (= (+ ?x ?x) ?y)]
                                      :add-matches identity
                                      :rem-matches identity}])]
     (is (= (get-matches (reduce add-wme R '[[:a 1] [:b 2]]))
