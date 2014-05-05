@@ -6,6 +6,10 @@
 ;; m : A match, which is a complete token.
 ;; k : An indirect reference to a node or memory location.
 
+(defn var-symbol? [x]
+  (and (symbol? x)
+       (= (get (str x) 0) \?)))
+
 (defn alpha-test-node [constant-test successors]
   {:type          :alpha-test
    :constant-test constant-test

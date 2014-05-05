@@ -1,10 +1,7 @@
 (ns com.pettomato.rete.builder
   (:require
-   [com.pettomato.rete :refer [alpha-test-node alpha-mem-node beta-mem-node join-node production-node]]))
-
-(defn var-symbol? [x]
-  (and (symbol? x)
-       (= (get (str x) 0) \?)))
+   [clojure.walk :refer (postwalk postwalk-replace)]
+   [com.pettomato.rete :refer [var-symbol? alpha-test-node alpha-mem-node beta-mem-node join-node production-node]]))
 
 (defn aggregate-consistency-tests [r]
   ;; ABxyCz => (A)(Bxy)(Cz)m where ABC are predicates and xyz are
@@ -42,7 +39,7 @@
         equality-tests (->> (map first r')
                             (map-indexed #(condition->equality-tests %1 %2 vars)))
         disequality-tests (->> (map rest r')
-                               (clojure.walk/postwalk-replace vars))]
+                               (postwalk-replace vars))]
     (map vector alpha-tests equality-tests disequality-tests)))
 
 (defn build-nodes [rs sort-alpha-tests]
@@ -121,10 +118,10 @@
     e))
 
 (defn compile-consistency-tests [tests]
-  (let [tests #+clj tests #+cljs (clojure.walk/postwalk-replace allowed-ops tests)]
+  (let [tests #+clj tests #+cljs (postwalk-replace allowed-ops tests)]
     (fn [t w]
       (let [t' (conj t w)
-            expr (clojure.walk/postwalk #(if (tagged-pos? %) (get-in t' (second %)) %)
+            expr (postwalk #(if (tagged-pos? %) (get-in t' (second %)) %)
                                         tests)]
         (every? true? (map #+clj eval #+cljs eval-expr expr))))))
 
@@ -195,24 +192,3 @@
       optimize-graph
       compile-graph
       (hash-entry-nodes-by-field index-field)))
-
-(defn build-smap [var-lookup match]
-  (reduce-kv #(assoc %1 %2 (get-in match %3)) {} var-lookup))
-
-(defn action->rule [action-schema]
-  (let [{:keys [preconditions achieves deletes]} action-schema
-        vars (->> preconditions
-                  (map-indexed (fn [ri c] (map-indexed (fn [ci t] [t [ri ci]]) c)))
-                  (apply concat)
-                  (filter (comp var-symbol? first))
-                  reverse
-                  (into {}))
-        add-template (concat (for [x deletes]  ['- x])
-                             (for [x achieves] ['+ x]))
-        rem-template (concat (for [x achieves] ['- x])
-                             (for [x deletes]  ['+ x]))]
-    {:conditions  preconditions
-     :add-matches #(mapcat (fn [match] (clojure.walk/postwalk-replace (build-smap vars match) add-template)) %)
-     ;;:rem-matches #(mapcat (fn [match] (clojure.walk/postwalk-replace (build-smap vars match) rem-template)) %)
-     :rem-matches (constantly [])
-     }))
