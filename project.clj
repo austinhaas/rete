@@ -1,7 +1,7 @@
 (defproject com.pettomato/rete "0.1.0-SNAPSHOT"
   :dependencies [[org.clojure/clojure "1.6.0"]]
   :jar-exclusions [#"\.cljx|\.swp|\.swo|\.DS_Store"]
-  :source-paths ["src/cljx"]
+  :source-paths ["src/clj"]
   :test-paths ["target/test-classes"]
 
   :cljx {:builds [{:source-paths ["src/cljx"]

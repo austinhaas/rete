@@ -1,8 +1,14 @@
 (ns com.pettomato.rete-test
   (:require
    [clojure.test :refer :all]
+   [com.pettomato.rete :refer [add-wme remove-wme get-matches clear-matches]]
    [com.pettomato.rete.builder :refer [parse-and-compile-rules]]
-   [com.pettomato.rete :refer [add-wme remove-wme get-matches clear-matches]]))
+   [com.pettomato.rete.helpers :refer [add-until-stable]]
+   #+clj
+   [com.pettomato.rete.helper-macros :refer [action->rule defaction]])
+  #+cljs
+  (:require-macros
+   [com.pettomato.rete.helper-macros :refer [action->rule defaction]]))
 
 (defn adder+ [ms x] (for [m ms] ['+ [x (apply + (map second m))]]))
 (defn adder- [ms x] (for [m ms] ['- [x (apply + (map second m))]]))
@@ -65,3 +71,41 @@
            [[[[:a 1] [:b 2]]]]))
     (is (= (get-matches (reduce add-wme R '[[:a 2] [:b 2]]))
            []))))
+
+(deftest actions
+  (let [as [{:preconditions [[:a '?v]]
+             :deletes       [[]]
+             :achieves      [[:b '?v]]}
+            {:preconditions [[:b '?v] (list < '?v 5)]
+             :deletes       [[]]
+             :achieves      [[:a (list inc '?v)]]}]
+        rs (map #(action->rule % true) as)
+        R  (parse-and-compile-rules 0 rs)]
+    (second (add-until-stable R [['+ [:a 0]] ['- [:a 0]]])))
+
+  (let [as [{:preconditions [[:a '?v]]
+             :deletes       [[]]
+             :achieves      [[:b '?v]]}
+            {:preconditions [[:b '?v] (list < '?v 5)]
+             :deletes       [[]]
+             :achieves      [[:a (list inc '?v)]]}]
+        rs (map action->rule as)
+        R  (parse-and-compile-rules 0 rs)]
+    (second (add-until-stable R [['+ [:a 0]] ['- [:a 0]]])))
+
+)
+
+(let [r1 (action->rule
+          {:preconditions [[:a ?a] [:b ?b]]
+           :achieves      [[:c (+ (* ?a ?a) ?b)] [:d (+ ?b ?a)]]
+           :deletes       []}
+          true)
+      r2 (action->rule
+          {:preconditions [[:c ?c]]
+           :achieves      [[:e ?c]]
+           :deletes       []}
+          true)
+      R (parse-and-compile-rules 0 [r1 r2])]
+  (second (add-until-stable R [[:+ [:a 3]] [:+ [:b 4]] [:- [:a 3]]])))
+
+(run-tests)
