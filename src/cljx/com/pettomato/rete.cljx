@@ -1,10 +1,10 @@
 (ns com.pettomato.rete)
 
-;; R : A compiled Rete network. {:keys [root-fn nodes]}.
+;; R : A compiled Rete network. {:keys [root-fn nodes alpha-mem beta-mem matches]}.
 ;; w : A Working Memory Element (wme).
 ;; t : A token, which is a seq of working memory elements.
 ;; m : A match, which is a complete token.
-;; k : An indirect reference to a node or memory location.
+;; k : An indirect reference to a node.
 
 (defn var-symbol? [x]
   (and (symbol? x)
