@@ -10,7 +10,7 @@
   (and (symbol? x)
        (= (get (str x) 0) \?)))
 
-(defn get-node [R k] (get-in R [:nodes k]))
+(defn get-node [R k] ((:nodes R) k))
 
 (defn left-activate [R k ts]
   (let [node (get-node R k)]
