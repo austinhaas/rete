@@ -153,27 +153,27 @@
   #(= (get % pos) val))
 
 (defn compile-nodes [nodes field]
-  (let [entry-nodes (->> nodes
-                         (filter #(= (:type %) :alpha-test))
-                         (filter #(nil? (:parent %))))
-        a->k (reduce (fn [m n]
-                       (let [[op pos val] (:test n)]
-                         (if (= pos field)
-                           (update-in m [val] (fnil conj #{}) (:id n))
-                           m)))
-                     {}
-                     entry-nodes)
-        nodes' (mapv (fn [n]
-                (case (:type n)
-                  :alpha-test (update-in n [:test] compile-constant-test)
-                  n))
-              nodes)
+  (let [entry-ns (->> nodes
+                      (filter #(= (:type %) :alpha-test))
+                      (filter #(nil? (:parent %))))
+        a->k     (reduce (fn [m n]
+                           (let [[op pos val] (:test n)]
+                             (if (= pos field)
+                               (update-in m [val] (fnil conj #{}) (:id n))
+                               m)))
+                         {}
+                         entry-ns)
+        nodes'   (mapv (fn [n]
+                         (case (:type n)
+                           :alpha-test (update-in n [:test] compile-constant-test)
+                           n))
+                       nodes)
         dummy-id (:id (first (filter #(= (:flag %) :dummy) nodes)))]
-    {:root-fn (fn [w] (a->k (get w field)))
-     :nodes   nodes'
+    {:root-fn   (fn [w] (a->k (get w field)))
+     :nodes     nodes'
      :alpha-mem {}
-     :beta-mem {dummy-id #{[]}}
-     :matches []}))
+     :beta-mem  {dummy-id #{[]}}
+     :matches   []}))
 
 (defn default-alpha-sort [index-field]
   (fn [x]
