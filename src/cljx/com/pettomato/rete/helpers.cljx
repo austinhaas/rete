@@ -10,7 +10,7 @@
             open ops
             all-matches []
             safety 0]
-       (assert (< safety max-iterations))
+       (assert (< safety max-iterations) safety)
        (if (empty? open)
          [R all-matches]
          (let [[op w]  (first open)
