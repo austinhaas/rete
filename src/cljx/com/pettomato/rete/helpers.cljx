@@ -20,8 +20,8 @@
                matches (get-matches R')]
            (if (empty? matches)
              (recur R' (rest open) all-matches (inc safety))
-             (let [ms (reduce into [] matches)]
+             (let [ms (apply concat matches)]
                (recur (clear-matches R')
-                      (into ms (rest open))
-                      (into all-matches ms)
+                      (concat ms (rest open))
+                      (concat all-matches ms)
                       (inc safety)))))))))
