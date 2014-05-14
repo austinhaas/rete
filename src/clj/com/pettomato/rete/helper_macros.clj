@@ -36,14 +36,16 @@
     [(distinct @bindings) (vec template')]))
 
 (defmacro compile-effects [preconditions template]
-  (let [matches (gensym)
-        match (gensym)
+  (let [match (gensym)
         [bindings template'] (get-bindings preconditions template match)]
-    `(fn [~matches]
-       (mapcat (fn [~match]
-                 (let [~@bindings]
-                   ~template'))
-               ~matches))))
+    `(fn [matches#]
+       (persistent!
+        (reduce (fn [v# ~match]
+                  (let [~@bindings]
+                    (-> v#
+                        ~@(for [x template'] `(conj! ~x)))))
+                (transient [])
+                matches#)))))
 
 (defmacro action->rule [schema remove-matches?]
   (let [{:keys [preconditions achieves deletes]} schema
