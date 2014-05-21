@@ -2,26 +2,30 @@
   (:require
    [com.pettomato.rete :refer [add-wme remove-wme get-matches clear-matches]]))
 
+(defn apply-op [R [op w]]
+  (case op
+    :+ (add-wme R w)
+    :- (remove-wme R w)))
+
+(defn consume-matches [R]
+  (reduce apply-op (clear-matches R) (apply concat (get-matches R))))
+
 (defn add-until-stable
-  ;; dfs
+  ;; depth-first
   ([R ops] (add-until-stable R ops 100))
   ([R ops max-iterations]
-     (loop [R           R
-            open        (seq ops)
-            all-matches ()
-            safety      0]
-       (assert (< safety max-iterations) safety)
+     (assert (empty? (get-matches R)))
+     (loop [R'     R
+            open   (seq ops)
+            closed []
+            safety 0]
+       (assert (< safety max-iterations) (str "safety:" safety ", open:" open))
        (if (empty? open)
-         [R (reverse all-matches)]
-         (let [[op w]  (first open)
-               R'      (case op
-                         :+ (add-wme R w)
-                         :- (remove-wme R w))
-               matches (get-matches R')]
-           (if (empty? matches)
-             (recur R' (rest open) all-matches (inc safety))
-             (let [ms (reduce (fn [l x] (reduce #(cons %2 %1) l x)) () matches)]
-               (recur (clear-matches R')
-                      (into (rest open) ms)
-                      (concat ms all-matches)
-                      (inc safety)))))))))
+         [R' closed]
+         (let [[op & ops] open
+               R''        (apply-op R' op)
+               successors (apply concat (get-matches R''))]
+           (recur (clear-matches R'')
+                  (concat successors ops)
+                  (conj closed op)
+                  (inc safety)))))))
