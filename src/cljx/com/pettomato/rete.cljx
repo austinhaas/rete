@@ -6,6 +6,16 @@
 ;; m : A match, which is a complete token.
 ;; k : An indirect reference to a node.
 
+(defn update
+  "Updates the value in map m at k with the function f.
+
+  Like update-in, but for updating a single top-level key.
+  Any additional args will be passed to f after the value."
+  ([m k f] (assoc m k (f (get m k))))
+  ([m k f x1] (assoc m k (f (get m k) x1)))
+  ([m k f x1 x2] (assoc m k (f (get m k) x1 x2)))
+  ([m k f x1 x2 & xs] (assoc m k (apply f (get m k) x1 x2 xs))))
+
 (defn var-symbol? [x]
   (and (symbol? x)
        (= (get (str x) 0) \?)))
@@ -23,8 +33,11 @@
                     (cond
                      (empty? ts') R
                      :else        (reduce #(left-activate %1 %2 ts') R (:successors node))))
-      :production (let [add-matches (:add-matches node)]
-                    (update-in R [:matches] conj (add-matches ts))))))
+      :production (let [add-matches (:add-matches node)
+                        ms          (add-matches ts)]
+                    (if (empty? ms)
+                      R
+                      (update R :matches conj ms))))))
 
 (defn right-activate [R k w]
   (let [node (get-node R k)]
@@ -54,8 +67,11 @@
                     (cond
                      (empty? ts') R
                      :else        (reduce #(left-activate- %1 %2 ts') R (:successors node))))
-      :production (let [rem-matches (:rem-matches node)]
-                    (update-in R [:matches] conj (rem-matches ts))))))
+      :production (let [rem-matches (:rem-matches node)
+                        ms          (rem-matches ts)]
+                    (if (empty? ms)
+                      R
+                      (update R :matches conj ms))))))
 
 (defn right-activate- [R k w]
   (let [node (get-node R k)]
@@ -90,4 +106,4 @@
 
 (defn get-matches [R] (get R :matches))
 
-(defn clear-matches [R] (update-in R [:matches] empty))
+(defn clear-matches [R] (update R :matches empty))
