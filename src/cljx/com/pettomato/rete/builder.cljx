@@ -5,7 +5,7 @@
 
 (defn condition->alpha-tests [c]
   (->> (map-indexed #(vector '= %1 %2) c)
-       (remove (comp var-symbol? last))))
+       (remove (comp var-symbol? peek))))
 
 (defn condition->equality-tests [ri c vars]
   (->> (map-indexed #(vector [ri %1] %2) c)
