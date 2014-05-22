@@ -13,22 +13,19 @@
        (map (fn [[pos v]] (vector '= pos (get vars v))))
        (remove (fn [[op p1 p2]] (= p1 p2)))))
 
-(defn canonicalize-tests [r sort-alpha-tests]
+(defn canonicalize-tests [r]
   (let [var->pos    (->> r
                          (map-indexed (fn [ri c] (map-indexed (fn [ci v] [v [ri ci]]) c)))
                          (apply concat)
                          (filter (comp var-symbol? first))
                          reverse
                          (into {}))
-        alpha-tests (->> r
-                         (map condition->alpha-tests)
-                         (map sort-alpha-tests))
-        equal-tests (->> r
-                         (map-indexed #(condition->equality-tests %1 %2 var->pos)))]
+        alpha-tests (map condition->alpha-tests r)
+        equal-tests (map-indexed #(condition->equality-tests %1 %2 var->pos) r)]
     (map vector alpha-tests equal-tests)))
 
-(defn build-nodes [rs sort-alpha-tests]
-  (let [rs (map (fn [r] (update-in r [:conditions] canonicalize-tests sort-alpha-tests)) rs)
+(defn build-nodes [rs]
+  (let [rs (map (fn [r] (update-in r [:conditions] canonicalize-tests)) rs)
         dummy {:type   :beta-mem
                :flag   :dummy
                :id     []
@@ -152,13 +149,13 @@
   (assert (= op '=))
   #(= (get % pos) val))
 
-(defn compile-nodes [nodes field]
+(defn compile-nodes [nodes]
   (let [entry-ns (->> nodes
                       (filter #(= (:type %) :alpha-test))
                       (filter #(nil? (:parent %))))
         a->k     (reduce (fn [m n]
                            (let [[op pos val] (:test n)]
-                             (if (= pos field)
+                             (if (= pos 0)
                                (update-in m [val] (fnil conj #{}) (:id n))
                                m)))
                          {}
@@ -169,24 +166,17 @@
                            n))
                        nodes)
         dummy-id (:id (first (filter #(= (:flag %) :dummy) nodes)))]
-    {:root-fn   (fn [w] (a->k (get w field)))
+    {:root-fn   (comp a->k first)
      :nodes     nodes'
      :alpha-mem {}
      :beta-mem  {dummy-id #{[]}}
      :matches   []}))
 
-(defn default-alpha-sort [index-field]
-  (fn [x]
-    (sort-by second #(cond (= %1 index-field) -1
-                           (= %2 index-field) 1
-                           :else              (compare %1 %2))
-             x)))
-
 (defn parse-and-compile-rules [rs]
   (let [index-field 0]
     (-> rs
-        (build-nodes (default-alpha-sort index-field))
+        build-nodes
         index-nodes
         add-successor-edges
         add-key-fns
-        (compile-nodes index-field))))
+        compile-nodes)))
