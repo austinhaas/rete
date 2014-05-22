@@ -182,10 +182,11 @@
                            :else              (compare %1 %2))
              x)))
 
-(defn parse-and-compile-rules [index-field rs]
-  (-> rs
-      (build-nodes (default-alpha-sort index-field))
-      index-nodes
-      add-successor-edges
-      add-key-fns
-      (compile-nodes index-field)))
+(defn parse-and-compile-rules [rs]
+  (let [index-field 0]
+    (-> rs
+        (build-nodes (default-alpha-sort index-field))
+        index-nodes
+        add-successor-edges
+        add-key-fns
+        (compile-nodes index-field))))
