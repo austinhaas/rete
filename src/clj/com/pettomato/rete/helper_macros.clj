@@ -1,7 +1,7 @@
 (ns com.pettomato.rete.helper-macros
   (:require
-   [clojure.walk :refer (postwalk)]
-   [com.pettomato.rete :refer [var-symbol?]]))
+   [clojure.walk :refer [postwalk]]
+   [com.pettomato.rete.helpers :refer [var-symbol?]]))
 
 (defn build-smap [var-lookup match]
   (reduce-kv #(assoc %1 %2 (get-in match %3)) {} var-lookup))

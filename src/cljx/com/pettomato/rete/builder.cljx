@@ -1,7 +1,7 @@
 (ns com.pettomato.rete.builder
   (:require
    [clojure.walk :refer (postwalk postwalk-replace)]
-   [com.pettomato.rete :refer [var-symbol?]]))
+   [com.pettomato.rete.helpers :refer [var-symbol?]]))
 
 (defn condition->alpha-tests [c]
   (->> (map-indexed #(vector '= %1 %2) c)
