@@ -1,6 +1,7 @@
 (ns com.pettomato.rete.builder
   (:require
    [clojure.walk :refer (postwalk postwalk-replace)]
+   [com.pettomato.rete.util :refer [update]]
    [com.pettomato.rete.helpers :refer [var-symbol?]]))
 
 (defn condition->alpha-tests [c]
@@ -25,7 +26,7 @@
     (map vector alpha-tests equal-tests)))
 
 (defn build-nodes [rs]
-  (let [rs (map (fn [r] (update-in r [:conditions] canonicalize-tests)) rs)
+  (let [rs (map (fn [r] (update r :conditions canonicalize-tests)) rs)
         dummy {:type   :beta-mem
                :flag   :dummy
                :id     []
@@ -90,13 +91,13 @@
         i-nodes (vec (sort-by :id nodes'))]
     (mapv (fn [node]
             (case (:type node)
-              :alpha-test (update-in node [:parent] #(get sig->id [:alpha-mem %]))
-              :alpha-mem  (update-in node [:parent] #(get sig->id [:alpha-test %]))
-              :beta-mem   (update-in node [:parent] #(get sig->id [:join %]))
+              :alpha-test (update node :parent #(get sig->id [:alpha-mem %]))
+              :alpha-mem  (update node :parent #(get sig->id [:alpha-test %]))
+              :beta-mem   (update node :parent #(get sig->id [:join %]))
               :join       (-> node
-                              (update-in [:alpha] #(get sig->id [:alpha-mem %]))
-                              (update-in [:beta]  #(get sig->id [:beta-mem %])))
-              :production (update-in node [:parent] #(get sig->id [:beta-mem %]))))
+                              (update :alpha #(get sig->id [:alpha-mem %]))
+                              (update :beta  #(get sig->id [:beta-mem %])))
+              :production (update node :parent #(get sig->id [:beta-mem %]))))
           i-nodes)))
 
 (defn add-successor-edges [nodes]
@@ -156,13 +157,13 @@
         a->k     (reduce (fn [m n]
                            (let [[op pos val] (:test n)]
                              (if (= pos 0)
-                               (update-in m [val] (fnil conj #{}) (:id n))
+                               (update m val (fnil conj #{}) (:id n))
                                m)))
                          {}
                          entry-ns)
         nodes'   (mapv (fn [n]
                          (case (:type n)
-                           :alpha-test (update-in n [:test] compile-constant-test)
+                           :alpha-test (update n :test compile-constant-test)
                            n))
                        nodes)
         dummy-id (:id (first (filter #(= (:flag %) :dummy) nodes)))]
