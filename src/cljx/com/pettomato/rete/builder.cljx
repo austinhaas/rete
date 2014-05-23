@@ -77,12 +77,12 @@
                                               :tests  nil}
                                       nodes' (reverse (conj alphas beta' join))]
                                   (recur cs' (into nodes nodes') b-out))))
-              prod   {:type       :production
-                      :parent     (:id beta)
-                      :id         (gensym)
-                      :priority   (:priority r)
-                      :conditions (:conditions r)
-                      :fn         (:fn r)}]
+              prod          {:type       :production
+                             :parent     (:id beta)
+                             :id         (gensym)
+                             :priority   (:priority r)
+                             :conditions (:conditions r)
+                             :fn         (:fn r)}]
           (recur rs' (conj nodes' beta prod)))))))
 
 (defn index-nodes [nodes]
@@ -119,14 +119,14 @@
             :alpha-mem  (let [id     (:id n)
                               tests  (:tests n)
                               ps     (map #(get-in % [1 1]) tests)
-                              key-fn (fn [w]
+                              key-fn (fn alpha-mem-key-fn [w]
                                        (let [ks (map #(get w %) ps)]
                                          (list* :alpha-mem id ks)))]
                           (assoc n :key-fn key-fn))
             :beta-mem   (let [id     (:id n)
                               tests  (:tests n)
                               ps     (map #(get % 2) tests)
-                              key-fn (fn [t]
+                              key-fn (fn beta-mem-key-fn [t]
                                        (let [ks (map #(get-in t %) ps)]
                                          (list* :beta-mem id ks)))]
                           (assoc n :key-fn key-fn))
@@ -135,11 +135,11 @@
                               alpha-id     (:alpha n)
                               beta-id      (:beta n)
                               ps1          (map #(get % 2) tests)
-                              alpha-key-fn (fn [t]
+                              alpha-key-fn (fn join-alpha-key-fn [t]
                                              (let [ks (map #(get-in t %) ps1)]
                                                (list* :alpha-mem alpha-id ks)))
                               ps2          (map #(get-in % [1 1]) tests)
-                              beta-key-fn  (fn [w]
+                              beta-key-fn  (fn join-beta-key-fn [w]
                                              (let [ks (map #(get w %) ps2)]
                                                (list* :beta-mem beta-id ks)))]
                           (assoc n :alpha-key-fn alpha-key-fn :beta-key-fn beta-key-fn))
@@ -177,10 +177,9 @@
                                                (if (= c 0) (compare x y) c))))}))
 
 (defn parse-and-compile-rules [rs]
-  (let [index-field 0]
-    (-> rs
-        build-nodes
-        index-nodes
-        add-successor-edges
-        add-key-fns
-        compile-nodes)))
+  (-> rs
+      build-nodes
+      index-nodes
+      add-successor-edges
+      add-key-fns
+      compile-nodes))
