@@ -77,12 +77,12 @@
                                               :tests  nil}
                                       nodes' (reverse (conj alphas beta' join))]
                                   (recur cs' (into nodes nodes') b-out))))
-              prod   {:type        :production
-                      :parent      (:id beta)
-                      :id          (gensym)
-                      :conditions  (:conditions r)
-                      :add-matches (:add-matches r)
-                      :rem-matches (:rem-matches r)}]
+              prod   {:type       :production
+                      :parent     (:id beta)
+                      :id         (gensym)
+                      :priority   (:priority r)
+                      :conditions (:conditions r)
+                      :fn         (:fn r)}]
           (recur rs' (conj nodes' beta prod)))))))
 
 (defn index-nodes [nodes]
@@ -171,7 +171,10 @@
      :nodes     nodes'
      :alpha-mem {}
      :beta-mem  {dummy-id #{[]}}
-     :matches   []}))
+     :matches   {}
+     :activated-productions (sorted-set-by (fn [x y]
+                                             (let [c (compare (first y) (first x))]
+                                               (if (= c 0) (compare x y) c))))}))
 
 (defn parse-and-compile-rules [rs]
   (let [index-field 0]

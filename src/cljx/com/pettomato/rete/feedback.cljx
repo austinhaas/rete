@@ -1,6 +1,6 @@
 (ns com.pettomato.rete.feedback
   (:require
-   [com.pettomato.rete :refer [add-wme remove-wme get-matches clear-matches]]))
+   [com.pettomato.rete :refer [add-wme remove-wme has-matches? trigger-next]]))
 
 (defn apply-op [R [op w]]
   (case op
@@ -8,21 +8,15 @@
     :- (remove-wme R w)))
 
 (defn add-until-stable
-  ;; depth-first
   ([R ops] (add-until-stable R ops 100))
   ([R ops max-iterations]
-     (assert (empty? (get-matches R)))
-     (loop [R'     R
-            open   (seq ops)
-            closed []
+     (loop [R      R
+            ops    (seq ops)
+            acc    (vec ops)
             safety 0]
-       (assert (< safety max-iterations) (str "safety:" safety ", open:" open))
-       (if (empty? open)
-         [R' closed]
-         (let [[op & ops] open
-               R''        (apply-op R' op)
-               successors (apply concat (get-matches R''))]
-           (recur (clear-matches R'')
-                  (concat successors ops)
-                  (conj closed op)
-                  (inc safety)))))))
+       (assert (< safety max-iterations) (str "safety:" safety))
+       (let [R' (reduce apply-op R ops)]
+         (if (has-matches? R')
+           (let [[R'' out] (trigger-next R')]
+             (recur R'' out (into acc out) (inc safety)))
+           [R' acc])))))

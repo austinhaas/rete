@@ -21,11 +21,11 @@
                     (cond
                      (empty? ts') R
                      :else        (reduce #(left-activate %1 %2 ts') R (:successors node))))
-      :production (let [add-matches (:add-matches node)
-                        ms          (add-matches ts)]
-                    (if (empty? ms)
-                      R
-                      (update R :matches conj ms))))))
+      :production (let [id (:id node)
+                        priority (:priority node)
+                        ms (map #(vector :+ %) ts)]
+                    (-> (update-in R [:matches id] (fnil into []) ms)
+                        (update-in [:activated-productions] conj [priority id]))))))
 
 (defn right-activate [R k w]
   (let [node (get-node R k)]
@@ -55,11 +55,11 @@
                     (cond
                      (empty? ts') R
                      :else        (reduce #(left-activate- %1 %2 ts') R (:successors node))))
-      :production (let [rem-matches (:rem-matches node)
-                        ms          (rem-matches ts)]
-                    (if (empty? ms)
-                      R
-                      (update R :matches conj ms))))))
+      :production (let [id (:id node)
+                        priority (:priority node)
+                        ms (map #(vector :- %) ts)]
+                    (-> (update-in R [:matches id] (fnil into []) ms)
+                        (update-in [:activated-productions] conj [priority id]))))))
 
 (defn right-activate- [R k w]
   (let [node (get-node R k)]
@@ -78,6 +78,20 @@
                      (empty? ts') R
                      :else        (reduce #(left-activate- %1 %2 ts') R (:successors node)))))))
 
+(defn has-matches? [R]
+  (not (empty? (:activated-productions R))))
+
+(defn trigger-next [R]
+  (let [[p id] (first (:activated-productions R))
+        node   (get-node R id)
+        f      (:fn node)
+        ms     (get-in R [:matches id])
+        R'     (-> R
+                   (update-in [:activated-productions] disj [p id])
+                   (update-in [:matches id] empty))
+        out    (f ms)]
+    [R' out]))
+
 ;;; API
 
 (defn add-wme [R w]
@@ -91,7 +105,3 @@
     (if-let [ks (successor-fn w)]
       (reduce #(right-activate- %1 %2 w) R ks)
       R)))
-
-(defn get-matches [R] (get R :matches))
-
-(defn clear-matches [R] (update R :matches empty))
