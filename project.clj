@@ -27,6 +27,6 @@
                                    :optimizations :advanced
                                    :pretty-print true}}]}
 
-  :profiles {:dev {:plugins [[org.clojure/clojurescript "0.0-2202"]
-                             [com.keminglabs/cljx "0.3.2"]
+  :profiles {:dev {:plugins [[org.clojure/clojurescript "0.0-2227"]
+                             [com.keminglabs/cljx "0.4.0"]
                              [lein-cljsbuild "1.0.3"]]}})
