@@ -5,7 +5,22 @@
 ;; t : A token, which is a seq of working memory elements.
 ;; m : A match, which is a complete token.
 
+(defn update
+  "Updates the value in map m at k with the function f.
+
+  Like update-in, but for updating a single top-level key.
+  Any additional args will be passed to f after the value."
+  ([m k f] (assoc m k (f (get m k))))
+  ([m k f x1] (assoc m k (f (get m k) x1)))
+  ([m k f x1 x2] (assoc m k (f (get m k) x1 x2)))
+  ([m k f x1 x2 & xs] (assoc m k (apply f (get m k) x1 x2 xs))))
+
 (defn memoize-once
+  "Like memoize, but forgets cached mappings after they are used
+  once. This is simple optimization that can be used by rules so that
+  removing a match doesn't require a redundant calculation, only this
+  additional bookkeeping."
+  ;; Used in rete-macros.
   [f]
   (let [mem (atom {})]
     (fn [& args]
@@ -16,9 +31,20 @@
           (swap! mem assoc args ret)
           ret)))))
 
-(defn default-inv-match [xs]
-  ;; Flip ops. Reverse the whole thing by using a list.
-  (reduce (fn [acc [op v]] (cons (case op :- [:+ v] :+ [:- v]) acc)) () xs))
+(defn invert-match-result [res]
+  "Takes a seq of signed terms and returns a new sequence that is the
+   the inversion of the original. All signs will be flipped and the
+   order of terms will be reversed."
+  ;; Used in rete-macros.
+  ;; Note that the order of terms is reversed implicitly by consing
+  ;; onto a list.
+  (reduce (fn [l [op v]]
+            (cons (case op
+                    :- [:+ v]
+                    :+ [:- v])
+                  l))
+          ()
+          res))
 
 (defn has-matches? [R]
   (not (empty? (:activated-productions R))))

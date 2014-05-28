@@ -1,17 +1,7 @@
 (ns com.pettomato.rete.rete-macros
   (:require
    [clojure.walk :refer [postwalk]]
-   [com.pettomato.rete :refer [default-inv-match memoize-once]]))
-
-(defn update
-  "Updates the value in map m at k with the function f.
-
-  Like update-in, but for updating a single top-level key.
-  Any additional args will be passed to f after the value."
-  ([m k f] (assoc m k (f (get m k))))
-  ([m k f x1] (assoc m k (f (get m k) x1)))
-  ([m k f x1 x2] (assoc m k (f (get m k) x1 x2)))
-  ([m k f x1 x2 & xs] (assoc m k (apply f (get m k) x1 x2 xs))))
+   [com.pettomato.rete :refer [update memoize-once invert-match-result]]))
 
 (defn var-symbol? [x] (and (symbol? x) (= (get (str x) 0) \?)))
 
@@ -46,25 +36,27 @@
                                    :else                  %))
                        vec)
         bindings  (distinct @bindings)
-        add-fn    `(fn [~match]
-                     (let [~@bindings]
-                       ~template))
-        ;;add-fn    (if cache? `(memoize-once ~add-fn) add-fn)
-
         inv-match (if (true? inv-match)
-                    `default-inv-match
+                    `invert-match-result
                     inv-match)
+        add       (gensym)
+        rem       (gensym)]
+    `(let [~add (fn [~match]
+                  (let [~@bindings]
+                    ~template))
+           ~add ~(if cache? `(memoize-once ~add) add)
+           ~rem (if ~inv-match
+                  (comp ~inv-match ~add)
+                  (constantly []))]
+       (fn [matches#]
+         (reduce (fn [v# [op# match#]]
+                   (case op#
+                     :+ (into v# (~add match#))
+                     :- (into v# (~rem match#))))
+                 []
+                 matches#)))))
 
-        rem-fn    (if inv-match
-                    `(comp ~inv-match ~add-fn)
-                    `(constantly []))]
-    `(fn [matches#]
-       (reduce (fn [v# [op# match#]]
-                 (case op#
-                   :+ (into v# (~add-fn match#))
-                   :- (into v# (~rem-fn match#))))
-               []
-               matches#))))
+invert-match-result
 
 (defn canonicalize-rule [r]
   (if (contains? r :achieves)
