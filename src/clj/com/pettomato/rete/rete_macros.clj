@@ -1,6 +1,7 @@
 (ns com.pettomato.rete.rete-macros
   (:require
-   [clojure.walk :refer [postwalk]]))
+   [clojure.walk :refer [postwalk]]
+   [com.pettomato.rete :refer [default-inv-match memoize-once]]))
 
 (defn update
   "Updates the value in map m at k with the function f.
@@ -12,24 +13,9 @@
   ([m k f x1 x2] (assoc m k (f (get m k) x1 x2)))
   ([m k f x1 x2 & xs] (assoc m k (apply f (get m k) x1 x2 xs))))
 
-(defn memoize-once
-  [f]
-  (let [mem (atom {})]
-    (fn [& args]
-      (if-let [e (find @mem args)]
-        (do (swap! mem dissoc args)
-            (val e))
-        (let [ret (apply f args)]
-          (swap! mem assoc args ret)
-          ret)))))
-
 (defn var-symbol? [x] (and (symbol? x) (= (get (str x) 0) \?)))
 
 (defn expr? [x] (and (list? x) (symbol? (first x))))
-
-(defn default-inv-match [xs]
-  ;; Flip ops. Reverse the whole thing by using a list.
-  (reduce (fn [acc [op v]] (cons (case op :- [:+ v] :+ [:- v]) acc)) () xs))
 
 (defn mk-prod-fn [preconds achieves deletes cache? inv-match]
   (let [;; 'var->pos' is a mapping from each variable in preconditions to
@@ -41,9 +27,6 @@
                        (filter (comp var-symbol? first))
                        reverse    ;; So that earlier bindings will replace later bindings.
                        (into {}))
-        inv-match (if (true? inv-match)
-                    `default-inv-match
-                    inv-match)
         match     (gensym)
         bindings  (atom [])
         expr->var (atom {})
@@ -66,7 +49,12 @@
         add-fn    `(fn [~match]
                      (let [~@bindings]
                        ~template))
-        add-fn    (if cache? `(memoize-once ~add-fn) add-fn)
+        ;;add-fn    (if cache? `(memoize-once ~add-fn) add-fn)
+
+        inv-match (if (true? inv-match)
+                    `default-inv-match
+                    inv-match)
+
         rem-fn    (if inv-match
                     `(comp ~inv-match ~add-fn)
                     `(constantly []))]
@@ -201,13 +189,13 @@
             :alpha-mem  (let [id     (:id n)
                               tests  (:tests n)
                               ps     (mapv #(get-in % [1 1]) tests)
-                              key-fn `(fn alpha-mem-key-fn [w#]
+                              key-fn `(fn [w#]
                                         (list* :alpha-mem ~id (map #(get w# %) ~ps)))]
                           (assoc n :key-fn key-fn))
             :beta-mem   (let [id     (:id n)
                               tests  (:tests n)
                               ps     (mapv #(get % 2) tests)
-                              key-fn `(fn beta-mem-key-fn [t#]
+                              key-fn `(fn [t#]
                                         (list* :beta-mem ~id (map #(get-in t# %) ~ps)))]
                           (assoc n :key-fn key-fn))
             :join       (let [id           (:id n)
@@ -215,10 +203,10 @@
                               alpha-id     (:alpha n)
                               beta-id      (:beta n)
                               ps1          (mapv #(get % 2) tests)
-                              alpha-key-fn `(fn join-alpha-key-fn [t#]
+                              alpha-key-fn `(fn [t#]
                                               (list* :alpha-mem ~alpha-id (map #(get-in t# %) ~ps1)))
                               ps2          (mapv #(get-in % [1 1]) tests)
-                              beta-key-fn  `(fn join-beta-key-fn [w#]
+                              beta-key-fn  `(fn [w#]
                                               (list* :beta-mem ~beta-id (map #(get w# %) ~ps2)))]
                           (assoc n :alpha-key-fn alpha-key-fn :beta-key-fn beta-key-fn))
             :production n))
@@ -358,9 +346,9 @@
      :beta-mem  {dummy-id #{[]}}
      :matches   {}
      :productions productions
-     :activated-productions (sorted-set-by
-                             (fn [x y]
-                               (let [c (compare (first y) (first x))]
-                                 (if (= c 0) (compare x y) c))))
+     :activated-productions `(sorted-set-by
+                              (fn [x# y#]
+                                (let [c# (compare (first y#) (first x#))]
+                                  (if (= c# 0) (compare x# y#) c#))))
      :add-wme add-wme
      :rem-wme rem-wme}))

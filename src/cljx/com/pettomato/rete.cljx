@@ -5,6 +5,21 @@
 ;; t : A token, which is a seq of working memory elements.
 ;; m : A match, which is a complete token.
 
+(defn memoize-once
+  [f]
+  (let [mem (atom {})]
+    (fn [& args]
+      (if-let [e (find @mem args)]
+        (do (swap! mem dissoc args)
+            (val e))
+        (let [ret (apply f args)]
+          (swap! mem assoc args ret)
+          ret)))))
+
+(defn default-inv-match [xs]
+  ;; Flip ops. Reverse the whole thing by using a list.
+  (reduce (fn [acc [op v]] (cons (case op :- [:+ v] :+ [:- v]) acc)) () xs))
+
 (defn has-matches? [R]
   (not (empty? (:activated-productions R))))
 
