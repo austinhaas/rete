@@ -56,8 +56,6 @@
                  []
                  matches#)))))
 
-invert-match-result
-
 (defn canonicalize-rule [r]
   (if (contains? r :achieves)
     (let [{:keys [preconds achieves deletes cache? inv-match]} r]
