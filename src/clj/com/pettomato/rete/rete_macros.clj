@@ -1,13 +1,13 @@
 (ns com.pettomato.rete.rete-macros
   (:require
    [clojure.walk :refer [postwalk]]
-   [com.pettomato.rete :refer [update memoize-once invert-match-result]]))
+   [com.pettomato.rete :refer [update memoize-once collapse-matches invert-match-result]]))
 
 (defn var-symbol? [x] (and (symbol? x) (= (get (str x) 0) \?)))
 
 (defn expr? [x] (and (list? x) (symbol? (first x))))
 
-(defn mk-prod-fn [preconds achieves deletes cache? inv-match]
+(defn synthesize-production [preconds achieves deletes cache? inv-match]
   (let [;; 'var->pos' is a mapping from each variable in preconditions to
         ;; the position where it first appears.
         ;;   e.g., [[?a 'x] [?b 'y]] => {?a [0 0], ?b [1 0]}.
@@ -57,12 +57,16 @@
                  matches#)))))
 
 (defn canonicalize-rule [r]
-  (if (contains? r :achieves)
-    (let [{:keys [preconds achieves deletes cache? inv-match]} r]
-      (-> r
-          (assoc :fn (mk-prod-fn preconds achieves deletes cache? inv-match))
-          (dissoc :achieves :deletes)))
-    r))
+  (let [r'  (if (contains? r :fn)
+              r
+              (let [{:keys [preconds achieves deletes cache? inv-match]} r]
+                (-> r
+                    (assoc :fn (synthesize-production preconds achieves deletes cache? inv-match))
+                    (dissoc :achieves :deletes :cache? :inv-match))))
+        r'' (if (get r' :collapse-matches true)
+              (update-in r' [:fn] #(list `comp % `collapse-matches))
+              r')]
+    r''))
 
 (defn condition->alpha-tests [c]
   (->> (map-indexed #(vector '= %1 %2) c)
@@ -220,7 +224,7 @@
       :production
       (let [{:keys [id priority]} n]
         `(-> ~R-sym
-             (update-in [:matches ~id] (fnil into []) (map #(vector :+ %) ~ts-sym))
+             (update-in [:matches ~id] into (for [t# ~ts-sym] [:+ t#]))
              (update-in [:activated-productions] conj [~priority ~id]))))))
 
 (defn compile-right-activation [nodes R-sym k w-sym]
@@ -266,7 +270,7 @@
       :production
       (let [{:keys [id priority]} n]
         `(-> ~R-sym
-             (update-in [:matches ~id] (fnil into []) (map #(vector :- %) ~ts-sym))
+             (update-in [:matches ~id] into (for [t# ~ts-sym] [:- t#]))
              (update-in [:activated-productions] conj [~priority ~id]))))))
 
 (defn compile-right-activation- [nodes R-sym k w-sym]
@@ -294,14 +298,13 @@
              (let [~@(interleave (repeat R-sym) (map #(compile-left-activation- nodes R-sym % ts) successors))]
                ~R-sym)))))))
 
-(defmacro compile-rete [& rules]
+(defmacro compile-rules [& rules]
   (let [nodes    (->> rules
                       (map canonicalize-rule)
                       build-nodes
                       index-nodes
                       add-successor-edges
                       add-key-fns)
-        productions (into {} (map (juxt :id :fn) (filter #(= (:type %) :production) nodes)))
         a->k     (->> nodes
                       (filter #(= (:type %) :alpha-test))
                       (filter #(nil? (:parent %)))
@@ -332,10 +335,16 @@
                                                            (compile-right-activation- nodes R-sym succ w-sym)))]
                                        ~R-sym)]))
                       ~R-sym))]
-    {:alpha-mem {}
-     :beta-mem  {dummy-id #{[]}}
-     :matches   {}
-     :productions productions
+    {:alpha-mem   {}
+     :beta-mem    {dummy-id #{[]}}
+     :matches     (->> nodes
+                       (filter #(= (:type %) :production))
+                       (map (juxt :id (constantly [])))
+                       (into {}))
+     :productions (->> nodes
+                       (filter #(= (:type %) :production))
+                       (map (juxt :id :fn))
+                       (into {}))
      :activated-productions `(sorted-set-by
                               (fn [x# y#]
                                 (let [c# (compare (first y#) (first x#))]

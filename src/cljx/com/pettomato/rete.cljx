@@ -31,6 +31,20 @@
           (swap! mem assoc args ret)
           ret)))))
 
+(defn collapse-matches [matches]
+  ;; Two passes, to preserve order. Is there a better way?
+  (let [[rems adds] (reduce (fn [[rems adds] [op match]]
+                              (case op
+                                :+ [rems (conj adds match)]
+                                :- [(conj rems match) adds]))
+                            [#{} #{}]
+                            matches)]
+    (remove (fn [[op match]]
+              (case op
+                :+ (contains? rems match)
+                :- (contains? adds match)))
+            matches)))
+
 (defn invert-match-result [res]
   "Takes a seq of signed terms and returns a new sequence that is the
    the inversion of the original. All signs will be flipped and the
@@ -75,7 +89,7 @@
   ([R ops max-iterations]
      (loop [R      R
             ops    (seq ops)
-            acc    (vec ops)
+            acc    []
             safety 0]
        (assert (< safety max-iterations) (str "safety:" safety))
        (let [R' (reduce apply-op R ops)]
