@@ -1,119 +1,66 @@
 (ns com.pettomato.rete-test
   (:require
    [clojure.test :refer :all]
-   [com.pettomato.rete :refer [add-wme remove-wme]]
-   [com.pettomato.rete.builder :refer [parse-and-compile-rules]]
-   [com.pettomato.rete.feedback :refer [add-until-stable]]
+   [com.pettomato.rete :refer [has-matches? trigger-next add-wme remove-wme add-until-stable]]
    #+clj
-   [com.pettomato.rete.helper-macros :refer [action->rule defaction]])
+   [com.pettomato.rete.rete-macros :refer [compile-rules]])
   #+cljs
   (:require-macros
-   [com.pettomato.rete.helper-macros :refer [action->rule defaction]]))
-
-(defn adder+ [ms x] (for [m ms] [:+ [x (apply + (map second m))]]))
-(defn adder- [ms x] (for [m ms] [:- [x (apply + (map second m))]]))
+   [com.pettomato.rete.rete-macros :refer [compile-rules]]))
 
 (deftest basic-tests
-  (let [R (parse-and-compile-rules 0 [{:conditions  '[[:a ?v] [:b ?v]]
-                                       :add-matches #(adder+ % :c)
-                                       :rem-matches #(adder- % :c)}
-                                      {:conditions  '[[:d ?v1] [:e ?v2]]
-                                       :add-matches #(adder+ % :f)
-                                       :rem-matches #(adder- % :f)}
-                                      {:conditions  '[[:c ?v1] [:f ?v2]]
-                                       :add-matches #(adder+ % :g)
-                                       :rem-matches #(adder- % :g)}
-                                      {:conditions  '[[:a ?v1] [:b ?v2] [:d ?v3]]
-                                       :add-matches #(adder+ % :h)
-                                       :rem-matches #(adder- % :h)}])]
-    (is (= (clear-matches R) R))
-    (is (= (get-matches R) []))
-    (is (= (add-wme R [:does-not-match 'does-not-match]) R))
-    (is (= (get-matches (add-wme R [:a 0])) []))
-    (is (= (get-matches (reduce add-wme R '[[:a 10] [:b 10]])) [[[:+ [:c 20]]]]))
-    (is (= (get-matches (reduce add-wme R '[[:a  5] [:b 10]])) []))
-    (is (= (get-matches (reduce add-wme R '[[:a 10] [:b 10] [:d 5] [:e 3]]))
-           [[[:+ [:c 20]]] [[:+ [:h 25]]] [[:+ [:f 8]]]]))
-    (is (= (get-matches (remove-wme (reduce add-wme R '[[:a 10] [:b 10] [:d 5] [:e 3]])
-                                    [:a 10]))
-           [[[:+ [:c 20]]] [[:+ [:h 25]]] [[:+ [:f 8]]] [[:- [:c 20]]] [[:- [:h 25]]]]))))
+  (let [R  (compile-rules {:preconds  [[:a ?v] [:b ?v]]
+                           :achieves  [[:c ?v]]
+                           :deletes   []})
+        R' (-> R (add-wme [:a 5]) (add-wme [:b 5]))]
+    (is (false? (has-matches? R)))
+    (is (true?  (has-matches? R')))
+    (is (= (second (trigger-next R')) [[:+ [:c 5]]]))
+    ;; A wme that doesn't match any rule should not cause the Rete to
+    ;; change.
+    (is (= (add-wme R [:does-not-match 'does-not-match]) R))))
 
+(deftest advanced-tests
+  (let [R (compile-rules {:preconds  [[:a ?a] [:b ?b]]
+                          :achieves  [[:c (+ ?a ?b)]]
+                          :inv-match true}
+                         {:preconds  [[:a ?a] [:b ?b] [:c ?c]]
+                          :achieves  [[:d (+ ?a ?b ?c)]]
+                          :inv-match true}
+                         {:preconds  [[:d ?v] [:e ?v]]
+                          :achieves  [[:f ?v]]
+                          :inv-match true})]
+    (let [[R' ms] (add-until-stable R [[:+ [:a 0]] [:+ [:b 1]] [:+ [:e 2]]])]
+      (is (= ms [[:+ [:c 1]] [:+ [:d 2]] [:+ [:f 2]]])))
+    ;; The default behavior is to collapse matches when possible.
+    (let [[R' ms] (add-until-stable R [[:+ [:a 0]] [:+ [:b 1]] [:- [:a 0]]])]
+      (is (= ms [])))))
 
+(deftest cache-test
+  (let [i (atom 0)
+        R (compile-rules {:preconds         [[:a ?a]]
+                          :achieves         [[:b (swap! i inc)]]
+                          :collapse-matches false
+                          :inv-match        true
+                          :cache?           true})
+        [R' ms] (add-until-stable R [[:+ [:a 0]] [:- [:a 0]]])]
+    (is (= ms [[:+ [:b 1]] [:- [:b 1]]]))))
 
-(deftest beta-sharing
-  (let [R (parse-and-compile-rules 0
-                                   [{:conditions  '[[:a ?x]]
-                                     :add-matches identity
-                                     :rem-matches identity}
-                                    {:conditions  '[[:a ?y]]
-                                     :add-matches identity
-                                     :rem-matches identity}
-                                    {:conditions  '[[:a ?x] [:c ?x]]
-                                     :add-matches identity
-                                     :rem-matches identity}])]
-    (is (= (get-matches (reduce add-wme R '[[:a 5] [:c 5]]))
-           [[[[:a 5]]] [[[:a 5]]] [[[:a 5] [:c 5]]]]))))
+(deftest priority-test
+  (let [R (compile-rules {:preconds [[:a ?a]]
+                          :achieves [[:x ?a]]
+                          :priority 2}
+                         {:preconds [[:a ?a] [:b ?b]]
+                          :achieves [[:y (+ ?a ?b)]]
+                          :priority 3}
+                         {:preconds [[:b ?b]]
+                          :achieves [[:z ?b]]
+                          :priority 1})
+        [R' ms] (add-until-stable R [[:+ [:a 1]] [:+ [:b 2]]])]
+    (is (= ms [[:+ [:y 3]] [:+ [:x 1]] [:+ [:z 2]]]))))
 
-(deftest consistency-tests
-  (let [R (parse-and-compile-rules 0
-                                   [{:conditions '[[:a ?x] [:b ?y] (< ?x ?y)]
-                                     :add-matches identity
-                                     :rem-matches identity}])]
-    (is (= (get-matches (reduce add-wme R '[[:a 1] [:b 2]]))
-           [[[[:a 1] [:b 2]]]]))
-    (is (= (get-matches (reduce add-wme R '[[:a 2] [:b 2]]))
-           []))))
+;; Test wme removal.
 
-(deftest consistency-ops
-  (let [R (parse-and-compile-rules 0
-                                   [{:conditions '[[:a ?x] [:b ?y] (= (+ ?x ?x) ?y)]
-                                     :add-matches identity
-                                     :rem-matches identity}])]
-    (is (= (get-matches (reduce add-wme R '[[:a 1] [:b 2]]))
-           [[[[:a 1] [:b 2]]]]))
-    (is (= (get-matches (reduce add-wme R '[[:a 2] [:b 2]]))
-           []))))
+;; Test invert match fns.
 
-(deftest actions
-  (let [as [{:preconditions [[:a '?v]]
-             :deletes       [[]]
-             :achieves      [[:b '?v]]}
-            {:preconditions [[:b '?v] (list < '?v 5)]
-             :deletes       [[]]
-             :achieves      [[:a (list inc '?v)]]}]
-        rs (map #(action->rule % true) as)
-        R  (parse-and-compile-rules 0 rs)]
-    (second (add-until-stable R [[:+ [:a 0]] [:- [:a 0]]]))))
-
-(run-tests)
-
-(let [R (parse-and-compile-rules [(action->rule {:label      p1
-                                                 :preconditions [[:a ?v1] [:b ?v2]]
-                                                 :deletes    []
-                                                 :achieves   [[:c (+ ?v1 ?v2)] [:q (+ ?v1 ?v2)]]}
-                                                false
-                                                false)
-                                  (action->rule {:label      p2
-                                                 :preconditions [[:c ?v1]]
-                                                 :deletes    []
-                                                 :achieves   [[:d (+ ?v1 ?v1)]]}
-                                                false
-                                                false)
-                                  (action->rule {:label      p3
-                                                 :preconditions [[:d ?v1]]
-                                                 :deletes    []
-                                                 :achieves   [[:e (+ ?v1 ?v1)]]}
-                                                false
-                                                false)])]
-  (second (add-until-stable R [[:+ [:a 1]] [:+ [:a 3]] [:+ [:b 2]]])))
-
-(defaction foo
-  {:preconditions [[:a ?v1]]
-   :deletes    []
-   :achieves   [[:b (gensym)]]
-   :priority   10}
-
-)
-
-(let [R (parse-and-compile-rules [foo])]
-  (second (add-until-stable R [[:+ [:a 1]] [:- [:a 1]]])))
+;; (run-tests)
