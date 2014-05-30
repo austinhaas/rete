@@ -23,7 +23,8 @@
 (deftest advanced-tests
   (let [R (compile-rules {:preconds  [[:a ?a] [:b ?b]]
                           :achieves  [[:c (+ ?a ?b)]]
-                          :inv-match true}
+                          :inv-match true
+                          :collapse-matches? true}
                          {:preconds  [[:a ?a] [:b ?b] [:c ?c]]
                           :achieves  [[:d (+ ?a ?b ?c)]]
                           :inv-match true}
@@ -32,7 +33,6 @@
                           :inv-match true})]
     (let [[R' ms] (add-until-stable R [[:+ [:a 0]] [:+ [:b 1]] [:+ [:e 2]]])]
       (is (= ms [[:+ [:c 1]] [:+ [:d 2]] [:+ [:f 2]]])))
-    ;; The default behavior is to collapse matches when possible.
     (let [[R' ms] (add-until-stable R [[:+ [:a 0]] [:+ [:b 1]] [:- [:a 0]]])]
       (is (= ms [])))))
 

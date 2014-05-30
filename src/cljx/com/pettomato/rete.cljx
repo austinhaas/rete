@@ -39,10 +39,15 @@
                                 :- [(conj rems match) adds]))
                             [#{} #{}]
                             matches)]
-    (remove (fn [[op match]]
+    (reduce (fn [acc [op match]]
               (case op
-                :+ (contains? rems match)
-                :- (contains? adds match)))
+                :+ (if (contains? rems match)
+                     acc
+                     (conj acc [op match]))
+                :- (if (contains? adds match)
+                     acc
+                     (conj acc [op match]))))
+            []
             matches)))
 
 (defn invert-match-result [res]
@@ -68,7 +73,7 @@
         f      ((:productions R) id)
         ms     (get-in R [:matches id])
         R'     (-> R
-                   (update-in [:activated-productions] disj [p id])
+                   (update :activated-productions disj [p id])
                    (update-in [:matches id] empty))
         out    (f ms)]
     [R' out]))

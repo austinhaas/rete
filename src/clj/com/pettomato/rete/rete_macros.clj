@@ -45,9 +45,9 @@
                   (let [~@bindings]
                     ~template))
            ~add ~(if cache? `(memoize-once ~add) add)
-           ~rem (if ~inv-match
-                  (comp ~inv-match ~add)
-                  (constantly []))]
+           ~rem ~(if inv-match
+                  `(comp ~inv-match ~add)
+                  `(constantly []))]
        (fn [matches#]
          (reduce (fn [v# [op# match#]]
                    (case op#
@@ -63,7 +63,7 @@
                 (-> r
                     (assoc :fn (synthesize-production preconds achieves deletes cache? inv-match))
                     (dissoc :achieves :deletes :cache? :inv-match))))
-        r'' (if (get r' :collapse-matches true)
+        r'' (if (get r' :collapse-matches? false)
               (update-in r' [:fn] #(list `comp % `collapse-matches))
               r')]
     r''))
@@ -183,25 +183,25 @@
             :alpha-mem  (let [id     (:id n)
                               tests  (:tests n)
                               ps     (mapv #(get-in % [1 1]) tests)
-                              key-fn `(fn [w#]
-                                        (list* :alpha-mem ~id (map #(get w# %) ~ps)))]
+                              w      (gensym)
+                              key-fn `(fn [~w] [~id ~@(for [p ps] `(get ~w ~p))])]
                           (assoc n :key-fn key-fn))
             :beta-mem   (let [id     (:id n)
                               tests  (:tests n)
                               ps     (mapv #(get % 2) tests)
-                              key-fn `(fn [t#]
-                                        (list* :beta-mem ~id (map #(get-in t# %) ~ps)))]
+                              t      (gensym)
+                              key-fn `(fn [~t] [~id ~@(for [p ps] `(get-in ~t ~p))])]
                           (assoc n :key-fn key-fn))
             :join       (let [id           (:id n)
                               tests        (:tests n)
                               alpha-id     (:alpha n)
                               beta-id      (:beta n)
                               ps1          (mapv #(get % 2) tests)
-                              alpha-key-fn `(fn [t#]
-                                              (list* :alpha-mem ~alpha-id (map #(get-in t# %) ~ps1)))
+                              t            (gensym)
+                              alpha-key-fn `(fn [~t] [~alpha-id ~@(for [p ps1] `(get-in ~t ~p))])
                               ps2          (mapv #(get-in % [1 1]) tests)
-                              beta-key-fn  `(fn [w#]
-                                              (list* :beta-mem ~beta-id (map #(get w# %) ~ps2)))]
+                              w            (gensym)
+                              beta-key-fn  `(fn [~w] [~beta-id ~@(for [p ps2] `(get ~w ~p))])]
                           (assoc n :alpha-key-fn alpha-key-fn :beta-key-fn beta-key-fn))
             :production n))
         nodes))
@@ -211,12 +211,17 @@
     (case (:type n)
       :beta-mem
       (let [{:keys [key-fn successors]} n]
-        `(let [~R-sym (reduce #(update-in %1 (~key-fn %2) (fnil conj #{}) %2) ~R-sym ~ts-sym)]
+        `(let [~R-sym (assoc ~R-sym :beta-mem (reduce #(update-in %1 (~key-fn %2) (fnil conj #{}) %2) (:beta-mem ~R-sym) ~ts-sym))]
            (let [~@(interleave (repeat R-sym) (map #(compile-left-activation nodes R-sym % ts-sym) successors))]
              ~R-sym)))
       :join
       (let [{:keys [alpha-key-fn successors]} n]
-        `(let [~ts-sym (for [t# ~ts-sym, w# (get-in ~R-sym (~alpha-key-fn t#))] (conj t# w#))]
+        `(let [~ts-sym (reduce (fn [acc# t#]
+                                 (reduce (fn [acc# w#] (conj acc# (conj t# w#)))
+                                         acc#
+                                         (get-in (:alpha-mem ~R-sym) (~alpha-key-fn t#))))
+                               []
+                               ~ts-sym)]
            (if (empty? ~ts-sym)
              ~R-sym
              (let [~@(interleave (repeat R-sym) (map #(compile-left-activation nodes R-sym % ts-sym) successors))]
@@ -239,14 +244,14 @@
            ~R-sym))
       :alpha-mem
       (let [{:keys [key-fn successors]} n]
-        `(let [~R-sym (update-in ~R-sym (~key-fn ~w-sym) (fnil conj #{}) ~w-sym)]
+        `(let [~R-sym (assoc ~R-sym :alpha-mem (update-in (:alpha-mem ~R-sym) (~key-fn ~w-sym) (fnil conj #{}) ~w-sym))]
            (let [~@(interleave (repeat R-sym) (map #(compile-right-activation nodes R-sym % w-sym) successors))]
              ~R-sym)))
       :join
       (let [{:keys [beta-key-fn successors]} n
             ts (gensym)]
-        `(let [~ts (get-in ~R-sym (~beta-key-fn ~w-sym))
-               ~ts (for [t# ~ts] (conj t# ~w-sym))]
+        `(let [~ts (get-in (:beta-mem ~R-sym) (~beta-key-fn ~w-sym))
+               ~ts (mapv (fn [t#] (conj t# ~w-sym)) ~ts)]
            (if (empty? ~ts)
              ~R-sym
              (let [~@(interleave (repeat R-sym) (map #(compile-left-activation nodes R-sym % ts) successors))]
@@ -257,12 +262,17 @@
     (case (:type n)
       :beta-mem
       (let [{:keys [key-fn successors]} n]
-        `(let [~R-sym (reduce #(update-in %1 (~key-fn %2) (fnil disj #{}) %2) ~R-sym ~ts-sym)]
+        `(let [~R-sym (assoc ~R-sym :beta-mem (reduce #(update-in %1 (~key-fn %2) (fnil disj #{}) %2) (:beta-mem ~R-sym) ~ts-sym))]
            (let [~@(interleave (repeat R-sym) (map #(compile-left-activation- nodes R-sym % ts-sym) successors))]
              ~R-sym)))
       :join
       (let [{:keys [alpha-key-fn successors]} n]
-        `(let [~ts-sym (for [t# ~ts-sym, w# (get-in ~R-sym (~alpha-key-fn t#))] (conj t# w#))]
+        `(let [~ts-sym (reduce (fn [acc# t#]
+                                 (reduce (fn [acc# w#] (conj acc# (conj t# w#)))
+                                         acc#
+                                         (get-in (:alpha-mem ~R-sym) (~alpha-key-fn t#))))
+                               []
+                               ~ts-sym)]
            (if (empty? ~ts-sym)
              ~R-sym
              (let [~@(interleave (repeat R-sym) (map #(compile-left-activation- nodes R-sym % ts-sym) successors))]
@@ -285,14 +295,14 @@
            ~R-sym))
       :alpha-mem
       (let [{:keys [key-fn successors]} n]
-        `(let [~R-sym (update-in ~R-sym (~key-fn ~w-sym) (fnil disj #{}) ~w-sym)]
+        `(let [~R-sym (assoc ~R-sym :alpha-mem (update-in (:alpha-mem ~R-sym) (~key-fn ~w-sym) (fnil disj #{}) ~w-sym))]
            (let [~@(interleave (repeat R-sym) (map #(compile-right-activation- nodes R-sym % w-sym) successors))]
              ~R-sym)))
       :join
       (let [{:keys [beta-key-fn successors]} n
             ts (gensym)]
-        `(let [~ts (get-in ~R-sym (~beta-key-fn ~w-sym))
-               ~ts (for [t# ~ts] (conj t# ~w-sym))]
+        `(let [~ts (get-in (:beta-mem ~R-sym) (~beta-key-fn ~w-sym))
+               ~ts (mapv (fn [t#] (conj t# ~w-sym)) ~ts)]
            (if (empty? ~ts)
              ~R-sym
              (let [~@(interleave (repeat R-sym) (map #(compile-left-activation- nodes R-sym % ts) successors))]
