@@ -39,16 +39,17 @@
                                 :- [(conj rems match) adds]))
                             [#{} #{}]
                             matches)]
-    (reduce (fn [acc [op match]]
-              (case op
-                :+ (if (contains? rems match)
-                     acc
-                     (conj acc [op match]))
-                :- (if (contains? adds match)
-                     acc
-                     (conj acc [op match]))))
-            []
-            matches)))
+    (first
+     (reduce (fn [[acc rems adds] [op match]]
+               (case op
+                 :+ (if (contains? rems match)
+                      [acc (disj rems match) adds]
+                      [(conj acc [op match]) rems adds])
+                 :- (if (contains? adds match)
+                      [acc rems (disj adds match)]
+                      [(conj acc [op match]) rems adds])))
+             [[] rems adds]
+             matches))))
 
 (defn invert-match-result [res]
   "Takes a seq of signed terms and returns a new sequence that is the
