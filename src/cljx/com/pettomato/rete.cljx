@@ -32,24 +32,13 @@
           ret)))))
 
 (defn collapse-matches [matches]
-  ;; Two passes, to preserve order. Is there a better way?
-  (let [[rems adds] (reduce (fn [[rems adds] [op match]]
-                              (case op
-                                :+ [rems (conj adds match)]
-                                :- [(conj rems match) adds]))
-                            [#{} #{}]
-                            matches)]
-    (first
-     (reduce (fn [[acc rems adds] [op match]]
-               (case op
-                 :+ (if (contains? rems match)
-                      [acc (disj rems match) adds]
-                      [(conj acc [op match]) rems adds])
-                 :- (if (contains? adds match)
-                      [acc rems (disj adds match)]
-                      [(conj acc [op match]) rems adds])))
-             [[] rems adds]
-             matches))))
+  (reduce (fn [acc [op match]]
+            (let [complement [(case op :+ :- :- :+) match]]
+             (if (some #{complement} acc)
+               (vec (remove #{complement} acc))
+               (conj acc [op match]))))
+          []
+          matches))
 
 (defn invert-match-result [res]
   "Takes a seq of signed terms and returns a new sequence that is the
