@@ -1,12 +1,11 @@
-(ns com.pettomato.rete-test
+(ns pettomato.rete-test
   (:require
    [clojure.test :refer :all]
-   [com.pettomato.rete :refer [has-matches? trigger-next add-wme remove-wme add-until-stable]]
-   #+clj
-   [com.pettomato.rete.rete-macros :refer [compile-rules]])
-  #+cljs
-  (:require-macros
-   [com.pettomato.rete.rete-macros :refer [compile-rules]]))
+   [pettomato.rete :refer [has-matches? trigger-next add-wme remove-wme add-until-stable]]
+   #?(:clj [pettomato.rete.rete-macros :refer [compile-rules]]))
+  #?(:cljs
+     (:require-macros
+      [pettomato.rete.rete-macros :refer [compile-rules]])))
 
 (deftest basic-tests
   (let [R  (compile-rules {:preconds  [[:a ?v] [:b ?v]]
