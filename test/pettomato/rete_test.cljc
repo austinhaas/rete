@@ -37,11 +37,11 @@
 
 (deftest cache-test
   (let [i (atom 0)
-        R (compile-rules {:preconds         [[:a ?a]]
-                          :achieves         [[:b (swap! i inc)]]
-                          :collapse-matches false
-                          :inv-match        true
-                          :cache?           true})
+        R (compile-rules {:preconds          [[:a ?a]]
+                          :achieves          [[:b (swap! i inc)]]
+                          :collapse-matches? false
+                          :inv-match         true
+                          :cache?            true})
         [R' ms] (add-until-stable R [[:+ [:a 0]] [:- [:a 0]]])]
     (is (= ms [[:+ [:b 1]] [:- [:b 1]]]))))
 
