@@ -1,0 +1,8 @@
+* TODO
+** Add documentation.
+** Write more tests.
+** Validate rules.
+*** Check that all input fields are valid.
+    - Signal error if a field isn't used.
+      - For example, collapse-matches instead of collapse-matches?.
+** Write tutorial.
