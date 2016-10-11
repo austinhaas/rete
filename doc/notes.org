@@ -1,4 +1,5 @@
 * TODO
+** Make sure this still works with Clojurescript.
 ** Add documentation.
 ** Write more tests.
 ** Validate rules.
