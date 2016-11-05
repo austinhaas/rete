@@ -7,9 +7,8 @@
 
 (defn memoize-once
   "Like memoize, but forgets cached mappings after they are used
-  once. This is simple optimization that can be used by rules so that
-  removing a match doesn't require a redundant calculation, only this
-  additional bookkeeping."
+  once. This is an optimization used to avoid a redundant computation
+  when removing a match."
   ;; Used in rete-macros.
   [f]
   (let [mem (atom {})]
