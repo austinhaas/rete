@@ -29,7 +29,7 @@
           []
           matches))
 
-(defn invert-match-result [res]
+(defn invert-signed-terms [res]
   "Takes a seq of signed terms and returns a new sequence that is the
    the inversion of the original. All signs will be flipped and the
    order of terms will be reversed."

@@ -1,7 +1,7 @@
 (ns pettomato.rete.rete-macros
   (:require
    [clojure.walk :refer [postwalk]]
-   [pettomato.rete :refer [memoize-once collapse-matches invert-match-result]]))
+   [pettomato.rete :refer [memoize-once collapse-matches invert-signed-terms]]))
 
 (defn var-symbol? [x] (and (symbol? x) (= (get (str x) 0) \?)))
 
@@ -37,7 +37,7 @@
                        vec)
         bindings  (distinct @bindings)
         inv-match (if (true? inv-match)
-                    `invert-match-result
+                    `invert-signed-terms
                     inv-match)
         add       (gensym)
         rem       (gensym)]
