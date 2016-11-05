@@ -3,11 +3,11 @@
    [clojure.walk :refer [postwalk]]
    [pettomato.rete.util :refer [memoize-once collapse-terms invert-signed-terms]]))
 
-(defn var-symbol? [x] (and (symbol? x) (= (get (str x) 0) \?)))
+(defn- var-symbol? [x] (and (symbol? x) (= (get (str x) 0) \?)))
 
-(defn expr? [x] (and (list? x) (symbol? (first x))))
+(defn- expr? [x] (and (list? x) (symbol? (first x))))
 
-(defn synthesize-production [preconds achieves deletes cache? inv-match]
+(defn- synthesize-production [preconds achieves deletes cache? inv-match]
   (let [;; 'var->pos' is a mapping from each variable in preconditions to
         ;; the position where it first appears.
         ;;   e.g., [[?a 'x] [?b 'y]] => {?a [0 0], ?b [1 0]}.
@@ -23,17 +23,17 @@
         template  (->> (concat (for [x deletes]  [:- x])
                                (for [x achieves] [:+ x]))
                        (postwalk #(cond
-                                   (contains? var->pos %) (let [v    %
-                                                                pos  (get var->pos v)
-                                                                expr `(get-in ~match ~pos)]
-                                                            (swap! bindings into [v expr])
-                                                            v)
-                                   (expr? %)              (let [v    (@expr->var % (gensym))
-                                                                expr %]
-                                                            (swap! bindings into [v expr])
-                                                            (swap! expr->var assoc % v)
-                                                            v)
-                                   :else                  %))
+                                    (contains? var->pos %) (let [v    %
+                                                                 pos  (get var->pos v)
+                                                                 expr `(get-in ~match ~pos)]
+                                                             (swap! bindings into [v expr])
+                                                             v)
+                                    (expr? %)              (let [v    (@expr->var % (gensym))
+                                                                 expr %]
+                                                             (swap! bindings into [v expr])
+                                                             (swap! expr->var assoc % v)
+                                                             v)
+                                    :else                  %))
                        vec)
         bindings  (distinct @bindings)
         inv-match (if (true? inv-match)
@@ -46,8 +46,8 @@
                     ~template))
            ~add ~(if cache? `(memoize-once ~add) add)
            ~rem ~(if inv-match
-                  `(comp ~inv-match ~add)
-                  `(constantly []))]
+                   `(comp ~inv-match ~add)
+                   `(constantly []))]
        (fn [matches#]
          (reduce (fn [v# [op# match#]]
                    (case op#
@@ -56,7 +56,7 @@
                  []
                  matches#)))))
 
-(defn canonicalize-rule [r]
+(defn- canonicalize-rule [r]
   (let [r'  (if (contains? r :fn)
               r
               (let [{:keys [preconds achieves deletes cache? inv-match]} r]
@@ -68,17 +68,17 @@
               r')]
     r''))
 
-(defn condition->alpha-tests [c]
+(defn- condition->alpha-tests [c]
   (->> (map-indexed #(vector '= %1 %2) c)
        (remove (comp var-symbol? peek))))
 
-(defn condition->equality-tests [ri c vars]
+(defn- condition->equality-tests [ri c vars]
   (->> (map-indexed #(vector [ri %1] %2) c)
        (filter (comp var-symbol? second))
        (map (fn [[pos v]] (vector '= pos (get vars v))))
        (remove (fn [[op p1 p2]] (= p1 p2)))))
 
-(defn canonicalize-tests [r]
+(defn- canonicalize-tests [r]
   (let [var->pos    (->> r
                          (map-indexed (fn [ri c] (map-indexed (fn [ci v] [v [ri ci]]) c)))
                          (apply concat)
@@ -89,7 +89,7 @@
         equal-tests (map-indexed #(condition->equality-tests %1 %2 var->pos) r)]
     (map vector alpha-tests equal-tests)))
 
-(defn build-nodes [rs]
+(defn- build-nodes [rs]
   (let [rs (map (fn [r] (update r :preconds canonicalize-tests)) rs)
         dummy {:type   :beta-mem
                :flag   :dummy
@@ -149,7 +149,7 @@
                              :fn       (:fn r)}]
           (recur rs' (conj nodes' beta prod)))))))
 
-(defn index-nodes [nodes]
+(defn- index-nodes [nodes]
   (let [sig->id (zipmap (map (juxt :type :id) nodes) (range))
         nodes'  (map (fn [n] (assoc n :id (sig->id ((juxt :type :id) n)))) nodes)
         i-nodes (vec (sort-by :id nodes'))]
@@ -164,7 +164,7 @@
               :production (update node :parent #(get sig->id [:beta-mem %]))))
           i-nodes)))
 
-(defn add-successor-edges [nodes]
+(defn- add-successor-edges [nodes]
   (reduce (fn [ns n]
             (case (:type n)
               :join (-> ns
@@ -176,7 +176,7 @@
           nodes
           nodes))
 
-(defn add-key-fns [nodes]
+(defn- add-key-fns [nodes]
   (mapv (fn [n]
           (case (:type n)
             :alpha-test n
@@ -206,7 +206,7 @@
             :production n))
         nodes))
 
-(defn compile-left-activation [nodes R-sym k ts-sym]
+(defn- compile-left-activation [nodes R-sym k ts-sym]
   (let [n (nodes k)]
     (case (:type n)
       :beta-mem
@@ -232,7 +232,7 @@
              (update-in [:matches ~id] into (for [t# ~ts-sym] [:+ t#]))
              (update-in [:activated-productions] conj [~priority ~id]))))))
 
-(defn compile-right-activation [nodes R-sym k w-sym]
+(defn- compile-right-activation [nodes R-sym k w-sym]
   (let [n (nodes k)]
     (case (:type n)
       :alpha-test
@@ -257,7 +257,7 @@
              (let [~@(interleave (repeat R-sym) (map #(compile-left-activation nodes R-sym % ts) successors))]
                ~R-sym)))))))
 
-(defn compile-left-activation- [nodes R-sym k ts-sym]
+(defn- compile-left-activation- [nodes R-sym k ts-sym]
   (let [n (nodes k)]
     (case (:type n)
       :beta-mem
@@ -283,7 +283,7 @@
              (update-in [:matches ~id] into (for [t# ~ts-sym] [:- t#]))
              (update-in [:activated-productions] conj [~priority ~id]))))))
 
-(defn compile-right-activation- [nodes R-sym k w-sym]
+(defn- compile-right-activation- [nodes R-sym k w-sym]
   (let [n (nodes k)]
     (case (:type n)
       :alpha-test
