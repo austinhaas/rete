@@ -1,7 +1,7 @@
 (ns pettomato.rete.rete-macros
   (:require
    [clojure.walk :refer [postwalk]]
-   [pettomato.rete :refer [memoize-once collapse-terms invert-signed-terms]]))
+   [pettomato.rete.util :refer [memoize-once collapse-terms invert-signed-terms]]))
 
 (defn var-symbol? [x] (and (symbol? x) (= (get (str x) 0) \?)))
 
