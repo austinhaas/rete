@@ -5,14 +5,14 @@
 
 ;; Note that both input values use the same variable.
 (def R (compile-rules {:preconds  [[:a ?v] [:b ?v]]
-                        :achieves  [[:c ?v]]
-                        :deletes   [[:d ?v]]}))
+                       :achieves  [[:c ?v]]
+                       :deletes   [[:d ?v]]}))
 
 (has-matches? R)
 
 (def R' (-> R
-             (add-wme [:a 5])
-             (add-wme [:b 5])))
+            (add-wme [:a 5])
+            (add-wme [:b 5])))
 
 (has-matches? R')
 
