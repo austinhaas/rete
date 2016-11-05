@@ -20,9 +20,11 @@
           (swap! mem assoc args ret)
           ret)))))
 
+(defn- inv [op] (case op :+ :- :- :+))
+
 (defn collapse-matches [matches]
   (reduce (fn [acc [op match]]
-            (let [complement [(case op :+ :- :- :+) match]]
+            (let [complement [(inv op) match]]
               (if (some #{complement} acc)
                 (vec (remove #{complement} acc))
                 (conj acc [op match]))))
@@ -37,10 +39,7 @@
   ;; Note that the order of terms is reversed implicitly by consing
   ;; onto a list.
   (reduce (fn [l [op v]]
-            (cons (case op
-                    :- [:+ v]
-                    :+ [:- v])
-                  l))
+            (cons [(inv op) v] l))
           ()
           terms))
 
