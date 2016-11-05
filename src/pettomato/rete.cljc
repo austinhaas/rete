@@ -22,20 +22,32 @@
 
 (defn- inv [op] (case op :+ :- :- :+))
 
-(defn collapse-matches [matches]
-  (reduce (fn [acc [op match]]
-            (let [complement [(inv op) match]]
-              (if (some #{complement} acc)
-                (vec (remove #{complement} acc))
-                (conj acc [op match]))))
-          []
-          matches))
+(defn- inv-term [[op v]] [(inv op) v])
+
+(defn collapse-matches
+  "Takes a seq of signed terms and returns a new seq of signed terms
+  that is the same as the original with complementary pairs (i.e.,
+  same value, but opposite polarity) removed.
+
+  Note that this does not preserve the original order of terms."
+  [terms]
+  (loop [open   terms
+         closed #{}]
+    (if (empty? open)
+      (seq closed)
+      (let [term (first open)
+            opp  (inv-term term)]
+        (if (contains? closed opp)
+          (recur (rest open)
+                 (disj closed opp))
+          (recur (rest open)
+                 (conj closed term)))))))
 
 (defn invert-signed-terms [terms]
   "Takes a seq of signed terms and returns a new sequence that is the
    the inversion of the original. All signs will be flipped and the
    order of terms will be reversed."
-  (map (fn [[op v]] [(inv op) v]) terms))
+  (map inv-term terms))
 
 (defn has-matches? [R]
   (not (empty? (:activated-productions R))))
