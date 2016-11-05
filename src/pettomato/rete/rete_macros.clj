@@ -1,7 +1,7 @@
 (ns pettomato.rete.rete-macros
   (:require
    [clojure.walk :refer [postwalk]]
-   [pettomato.rete :refer [memoize-once collapse-matches invert-signed-terms]]))
+   [pettomato.rete :refer [memoize-once collapse-terms invert-signed-terms]]))
 
 (defn var-symbol? [x] (and (symbol? x) (= (get (str x) 0) \?)))
 
@@ -64,7 +64,7 @@
                     (assoc :fn (synthesize-production preconds achieves deletes cache? inv-match))
                     (dissoc :achieves :deletes :cache? :inv-match))))
         r'' (if (get r' :collapse-matches? false)
-              (update-in r' [:fn] #(list `comp % `collapse-matches))
+              (update-in r' [:fn] #(list `comp % `collapse-terms))
               r')]
     r''))
 

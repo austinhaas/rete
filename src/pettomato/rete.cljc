@@ -24,7 +24,7 @@
 
 (defn- inv-term [[op v]] [(inv op) v])
 
-(defn collapse-matches
+(defn collapse-terms
   "Takes a seq of signed terms and returns a new seq of signed terms
   that is the same as the original with complementary pairs (i.e.,
   same value, but opposite polarity) removed.
