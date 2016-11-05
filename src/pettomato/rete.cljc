@@ -6,7 +6,7 @@
 ;; m : A match, which is a complete token.
 
 (defn has-matches? [R]
-  (not (empty? (:activated-productions R))))
+  (seq (:activated-productions R)))
 
 (defn trigger-next [R]
   (let [[p id] (first (:activated-productions R))
