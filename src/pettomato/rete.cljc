@@ -51,9 +51,10 @@
    ;; Note that multiple productions could be activated at the same
    ;; time, but the one with the highest priority will be triggered
    ;; first, and its output will be fed back into the system BEFORE
-   ;; any lower priority productions are triggered. That is because a
-   ;; NEW production with higher priority might be then be activated
-   ;; and it should be processed first.
+   ;; any lower priority productions are triggered. That may cause NEW
+   ;; productions to become activated with a higher priority than
+   ;; those ALREADY activated, and thus, they will fire first. This is
+   ;; like a "best-first" search.
    (loop [R      R
           ops    (seq ops)
           acc    []
