@@ -23,9 +23,9 @@
 (defn collapse-matches [matches]
   (reduce (fn [acc [op match]]
             (let [complement [(case op :+ :- :- :+) match]]
-             (if (some #{complement} acc)
-               (vec (remove #{complement} acc))
-               (conj acc [op match]))))
+              (if (some #{complement} acc)
+                (vec (remove #{complement} acc))
+                (conj acc [op match]))))
           []
           matches))
 
@@ -71,13 +71,13 @@
 (defn add-until-stable
   ([R ops] (add-until-stable R ops 100))
   ([R ops max-iterations]
-     (loop [R      R
-            ops    (seq ops)
-            acc    []
-            safety 0]
-       (assert (< safety max-iterations) (str "safety:" safety))
-       (let [R' (reduce apply-op R ops)]
-         (if (has-matches? R')
-           (let [[R'' out] (trigger-next R')]
-             (recur R'' out (into acc out) (inc safety)))
-           [R' acc])))))
+   (loop [R      R
+          ops    (seq ops)
+          acc    []
+          safety 0]
+     (assert (< safety max-iterations) (str "safety:" safety))
+     (let [R' (reduce apply-op R ops)]
+       (if (has-matches? R')
+         (let [[R'' out] (trigger-next R')]
+           (recur R'' out (into acc out) (inc safety)))
+         [R' acc])))))
