@@ -35,13 +35,7 @@
   "Takes a seq of signed terms and returns a new sequence that is the
    the inversion of the original. All signs will be flipped and the
    order of terms will be reversed."
-  ;; Used in rete-macros.
-  ;; Note that the order of terms is reversed implicitly by consing
-  ;; onto a list.
-  (reduce (fn [l [op v]]
-            (cons [(inv op) v] l))
-          ()
-          terms))
+  (map (fn [[op v]] [(inv op) v]) terms))
 
 (defn has-matches? [R]
   (not (empty? (:activated-productions R))))
