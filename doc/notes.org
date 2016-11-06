@@ -7,12 +7,14 @@
      order, since that isn't a documented feature of Clojure.
 ** Warn if cache? is supplied, but inv-match is not.
 ** Make sure this still works with Clojurescript.
+** Consider dropping the output value from add-until-stable.
+   - How could the same behavior be achieved?
+     {:preconds [[:a]]
+     :fn        println}
+     but, we'd need one rule like this for every fact.
 ** Add documentation.
    - [tag & vals] = relational data tuples.
    - Explain that achieves and deletes may contain arbitrary expressions.
-   - Explain why :fn might be necessary.
-     - Something to do with not knowing all the output tags at compile
-       time?
 ** Write more tests.
 ** Validate rules.
 *** Check that all input fields are valid.
