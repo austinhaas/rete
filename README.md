@@ -2,7 +2,7 @@
 
 A Clojure implementation of the Rete algorithm.
 
-This library is poorly documented and hasn't been thoroughly tested.
+_This library has not been thoroughly tested._
 
 ## Usage
 
