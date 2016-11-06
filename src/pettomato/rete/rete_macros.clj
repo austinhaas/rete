@@ -362,7 +362,8 @@
           returns a seq of signed facts.
 
       This is the longhand version used to specify a production
-      function that cannot be expressed using the above fields.
+      function that cannot be expressed using the above fields. This is
+      needed when the set of output fact types isn't static.
 
   tag: Any value that uniquely identifies the type of a fact.
 
