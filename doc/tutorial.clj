@@ -86,4 +86,11 @@
 ;; it. This is an optimization to avoid performing the calculation
 ;; again when removing a match.
 
-;;; TODO: cache? example.
+(let [R (compile-rules {:preconds  [[:a ?x]]
+                        :achieves  [[:b (do (Thread/sleep 1000) ?x)]]
+                        :inv-match true
+                        :cache?    true}) ;; Change to false and eval again.
+      [R' out] (time (add-until-stable R [[:+ [:a 3]]]))
+      [R'' out'] (time (add-until-stable R [[:- [:a 3]]]))]
+  (println "out: " out)
+  (println "out': " out'))
