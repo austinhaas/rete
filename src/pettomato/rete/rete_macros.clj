@@ -58,7 +58,7 @@
 
 (defn- canonicalize-rule [r]
   (let [r'  (if (contains? r :fn)
-              r
+              (dissoc r :achieves :deletes :cache? :inv-match)
               (let [{:keys [preconds achieves deletes cache? inv-match]} r]
                 (-> r
                     (assoc :fn (synthesize-production preconds achieves deletes cache? inv-match))
