@@ -308,7 +308,68 @@
              (let [~@(interleave (repeat R-sym) (map #(compile-left-activation- nodes R-sym % ts) successors))]
                ~R-sym)))))))
 
-(defmacro compile-rules [& rules]
+(defmacro compile-rules
+  "Compiles the supplied rules into a rete network.
+
+  Each rule is a map with the following fields:
+
+    :preconds : A seq of [tag & vals].
+
+    :achieves : (Optional) A seq of [tag & vals] pairs. Default: [].
+
+    :deletes  : (Optional) A seq of [tag & vals] pairs. Default: [].
+
+    :inv-match : (Optional) True, a fn, or nil. Default: nil.
+
+      This field implements truth maintenance for the production. This
+      comes into play when some fact that previously caused this
+      production to fire has been retracted. This production may have
+      generated new facts based on that fact that should now also be retracted.
+
+      If true, the default fn will be used, which simply uses the
+      original production function to generate the result again, but flips
+      the signs of the result values.
+
+      If a fn, that function should take the match and return the
+      values that should be added or removed. This functions is
+      effectively the opposite of the normal production function.
+
+      If not provided, no action will be taken when a relevant fact is
+      retracted.
+
+    :collapse-matches? : (Optional) Boolean. Default: false.
+
+      If true, then any pending matches that have the same value, but
+      opposite polarity will cancel out. If false, or not supplied, then
+      both values will trigger the rule.
+
+    :priority : (Optional) Any value that can be compared using compare.
+
+      Rules are fired, first, in order of any supplied priority
+      values, with higher values indicating higher priority, and second,
+      in the order they were supplied.
+
+    :cache? : (Optional) Boolean. Default: false.
+
+      If true, then the rule will be memoized with a special
+      memoization function that only remembers a result once. In other
+      words, the second time the production is called with the same input,
+      it'll return the cached value, but then immediately forget it. This
+      is an optimization to avoid repeating an expensive calculation when
+      removing a match.
+
+    :fn : (Optional) A function that takes a seq of signed matches and
+          returns a seq of signed facts.
+
+      This is the longhand version used to specify a production
+      function that cannot be expressed using the above fields.
+
+  tag: Any value that uniquely identifies the type of a fact.
+
+  val: A value or a variable, which is a symbol that begins with a '?',
+       such as ?a.
+  "
+  [& rules]
   (let [nodes    (->> rules
                       (map canonicalize-rule)
                       build-nodes
